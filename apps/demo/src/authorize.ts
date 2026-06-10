@@ -2,7 +2,7 @@
  * Phase 1 demo — Mechanism A, REGULATED (AUTH_REQUIRED) asset, end-to-end on Stellar testnet,
  * through the issuer-side approval server.
  *
- * "Hold before receiving": a user establishes a sponsored, issuer-authorized trustline *before*
+ * "Hold before receiving": a user establishes a sponsored, issuer-authorized trustline before
  * any funds arrive, so a later withdrawal can settle with no trustline step. Proves the second
  * regulated flow (mechanism A) alongside the claimable-balance flow (mechanism C).
  *

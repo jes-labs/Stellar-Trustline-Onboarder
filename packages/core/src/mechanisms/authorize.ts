@@ -5,7 +5,7 @@ import type { AssetProfile, AssetRef, BuildOptions, BuiltTransaction } from '../
 import { plannedChangeTrust, plannedIssuerAuthorize } from './_ops';
 
 /**
- * Mechanism A — authorize the trustline. For a user who needs to hold an asset *before* a
+ * Mechanism A — authorize the trustline. For a user who needs to hold an asset before a
  * withdrawal arrives. Establishes a sponsored trustline and, for regulated assets, authorizes it.
  */
 
@@ -41,12 +41,8 @@ export function buildAuthorize(
   network: string,
   options?: BuildOptions,
 ): BuiltTransaction {
-  if (params.preauthorize) {
-    // The protocol-level preauthorization path is not finalized (CAP-73 / CAP-32 are draft).
-    // We intentionally fall through to the trustline-creation-time authorization below so
-    // nothing on the critical path depends on a draft CAP.
-  }
-
+  // `preauthorize` is accepted but has no effect today: the protocol-level path (CAP-73 / CAP-32)
+  // is still draft, so we always authorize at trustline-creation time. See AuthorizeParams.
   const sandwich: PlannedOp[] = wrapSponsored(
     [plannedChangeTrust(params.asset, params.user, params.limit)],
     { sponsor: params.sponsor, sponsored: params.user },

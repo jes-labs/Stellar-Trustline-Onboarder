@@ -38,7 +38,6 @@ export function buildFreeze(
   return assemble({
     source: issuerAccount,
     network,
-    mechanism: 'authorize',
     operations: [op],
     requiredSigners: [params.asset.issuer],
     options,
@@ -75,7 +74,6 @@ export function buildClawback(
   return assemble({
     source: issuerAccount,
     network,
-    mechanism: 'authorize',
     operations: [op],
     requiredSigners: [params.asset.issuer],
     options,
