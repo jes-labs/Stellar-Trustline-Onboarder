@@ -1,0 +1,33 @@
+{
+  "name": "@trustline-onboarder/signer",
+  "version": "0.0.0",
+  "description": "Issuer signing adapters (local keypair, KMS) — the issuer key never lives in the server process in production",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "15.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}

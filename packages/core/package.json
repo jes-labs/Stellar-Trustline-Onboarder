@@ -1,0 +1,33 @@
+{
+  "name": "@trustline-onboarder/core",
+  "version": "0.0.0",
+  "description": "Shared types and Stellar transaction builders for mechanisms A, B, and C",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "15.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}

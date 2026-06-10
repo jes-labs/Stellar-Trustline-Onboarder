@@ -1,0 +1,25 @@
+{
+  "name": "@trustline-onboarder/demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "End-to-end testnet runner that exercises the onboarding mechanisms",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/unregulated.ts",
+    "start:regulated": "tsx src/regulated.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "15.1.0",
+    "@trustline-onboarder/approval-server": "workspace:*",
+    "@trustline-onboarder/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}

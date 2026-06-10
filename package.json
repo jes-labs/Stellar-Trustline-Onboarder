@@ -1,0 +1,31 @@
+{
+  "name": "trustline-onboarder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Trustline Onboarder — ecosystem standard + reference implementation for trustline-free onboarding into Stellar classic assets",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "demo": "pnpm --filter @trustline-onboarder/demo start",
+    "demo:regulated": "pnpm --filter @trustline-onboarder/demo start:regulated"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.16",
+    "turbo": "2.9.17",
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

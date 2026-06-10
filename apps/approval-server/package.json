@@ -1,0 +1,30 @@
+{
+  "name": "@trustline-onboarder/approval-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Issuer-side SEP-8-style approval server: compliance check, trustline authorization, sponsorship",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./app": "./src/app.ts",
+    "./config": "./src/config.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "15.1.0",
+    "@trustline-onboarder/core": "workspace:*",
+    "@trustline-onboarder/signer": "workspace:*",
+    "fastify": "5.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}
