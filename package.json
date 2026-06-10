@@ -15,7 +15,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "demo": "pnpm --filter @trustline-onboarder/demo start",
-    "demo:regulated": "pnpm --filter @trustline-onboarder/demo start:regulated"
+    "demo:regulated": "pnpm --filter @trustline-onboarder/demo start:regulated",
+    "demo:authorize": "pnpm --filter @trustline-onboarder/demo start:authorize"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",

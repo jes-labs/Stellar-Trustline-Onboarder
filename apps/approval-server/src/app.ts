@@ -8,15 +8,17 @@ import {
   toTransaction,
 } from '@trustline-onboarder/core';
 import { LocalSigner } from '@trustline-onboarder/signer';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { Compliance } from './compliance';
 import type { ServerConfig } from './config';
+import { ApprovalCache } from './idempotency';
 import { validateOnboardingTx } from './validate';
 
 export interface BuiltServer {
   app: FastifyInstance;
   signer: LocalSigner;
   compliance: Compliance;
+  approvals: ApprovalCache;
   config: ServerConfig;
   issuer: string;
 }
@@ -30,8 +32,26 @@ export interface BuiltServer {
 export function buildServer(config: ServerConfig): BuiltServer {
   const signer = new LocalSigner(config.issuerSecret);
   const compliance = new Compliance();
+  const approvals = new ApprovalCache();
   const issuer = signer.publicKey();
   const app = Fastify({ logger: false });
+
+  /**
+   * Guard the admin endpoints, which sign issuer operations. Returns true if the request is
+   * authorized; otherwise it has already sent the appropriate error response.
+   */
+  function requireAdmin(req: FastifyRequest, reply: FastifyReply): boolean {
+    if (!config.adminToken) {
+      reply.code(503).send({ error: 'admin_disabled' });
+      return false;
+    }
+    const header = req.headers.authorization;
+    if (header !== `Bearer ${config.adminToken}`) {
+      reply.code(401).send({ error: 'unauthorized' });
+      return false;
+    }
+    return true;
+  }
 
   // --- Discovery -----------------------------------------------------------
   app.get('/info', async () => ({
@@ -78,16 +98,27 @@ export function buildServer(config: ServerConfig): BuiltServer {
       return reply.send({ status: 'rejected', error: 'invalid_xdr' } satisfies ApprovalResult);
     }
 
-    const verdict = validateOnboardingTx(tx, issuer);
-    if (!verdict.ok) {
-      return reply.send({
-        status: 'rejected',
-        error: 'disallowed_transaction',
-        message: verdict.reason,
-      } satisfies ApprovalResult);
+    // Idempotency + replay protection: the same transaction always yields the same response, and
+    // is never signed or audited twice. The hash is stable across signing.
+    const txHash = tx.hash().toString('hex');
+    const cached = approvals.get(txHash);
+    if (cached) {
+      return reply.send(cached);
     }
 
-    // Compliance gate: every trustor we're asked to authorize must be cleared.
+    const verdict = validateOnboardingTx(tx, issuer);
+    if (!verdict.ok) {
+      return reply.send(
+        approvals.remember(txHash, {
+          status: 'rejected',
+          error: 'disallowed_transaction',
+          message: verdict.reason,
+        }),
+      );
+    }
+
+    // Compliance gate: every trustor we're asked to authorize must be cleared. Not cached, so a
+    // later approval can succeed once KYC completes.
     for (const trustor of verdict.authorizedTrustors) {
       if (!compliance.isApproved(trustor)) {
         return reply.send({
@@ -99,7 +130,7 @@ export function buildServer(config: ServerConfig): BuiltServer {
 
     // Nothing for the issuer to sign (unregulated) — approve as-is.
     if (verdict.authorizedTrustors.length === 0) {
-      return reply.send({ status: 'success', tx: txXdr } satisfies ApprovalResult);
+      return reply.send(approvals.remember(txHash, { status: 'success', tx: txXdr }));
     }
 
     // Apply the issuer authorization signature and record the audit trail.
@@ -107,13 +138,14 @@ export function buildServer(config: ServerConfig): BuiltServer {
     for (const trustor of verdict.authorizedTrustors) {
       compliance.record({ action: 'authorize', actor: issuer, subject: trustor });
     }
-    return reply.send({ status: 'revised', tx: tx.toXDR() } satisfies ApprovalResult);
+    return reply.send(approvals.remember(txHash, { status: 'revised', tx: tx.toXDR() }));
   });
 
   // --- Admin / MiCA --------------------------------------------------------
   app.post<{ Body: { trustor: string; assetCode?: string; reason?: string } }>(
     '/admin/freeze',
     async (req, reply) => {
+      if (!requireAdmin(req, reply)) return reply;
       const { trustor, assetCode, reason } = req.body ?? {};
       if (!trustor) return reply.code(400).send({ error: 'missing_trustor' });
       const asset = { code: assetCode ?? config.assetCode, issuer };
@@ -130,6 +162,7 @@ export function buildServer(config: ServerConfig): BuiltServer {
   app.post<{ Body: { from: string; amount: string; assetCode?: string; reason?: string } }>(
     '/admin/clawback',
     async (req, reply) => {
+      if (!requireAdmin(req, reply)) return reply;
       const { from, amount, assetCode, reason } = req.body ?? {};
       if (!from || !amount) return reply.code(400).send({ error: 'missing_from_or_amount' });
       const asset = { code: assetCode ?? config.assetCode, issuer };
@@ -145,5 +178,5 @@ export function buildServer(config: ServerConfig): BuiltServer {
 
   app.get('/audit', async () => ({ entries: compliance.audit() }));
 
-  return { app, signer, compliance, config, issuer };
+  return { app, signer, compliance, approvals, config, issuer };
 }

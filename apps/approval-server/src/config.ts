@@ -10,6 +10,11 @@ export interface ServerConfig {
   horizonUrl: string;
   /** The asset code this issuer operates (advertised in discovery). */
   assetCode: string;
+  /**
+   * Bearer token guarding the admin endpoints (`/admin/freeze`, `/admin/clawback`). These sign
+   * issuer operations, so they must be authenticated. When unset the admin endpoints are disabled.
+   */
+  adminToken?: string;
   port: number;
   host: string;
 }
@@ -25,6 +30,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
     network: env.NETWORK_PASSPHRASE ?? Networks.TESTNET,
     horizonUrl: env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org',
     assetCode: env.ASSET_CODE ?? 'EURC',
+    adminToken: env.ADMIN_TOKEN,
     port: Number(env.PORT ?? 8787),
     host: env.HOST ?? '127.0.0.1',
   };

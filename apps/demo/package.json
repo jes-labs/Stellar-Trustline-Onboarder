@@ -8,6 +8,7 @@
   "scripts": {
     "start": "tsx src/unregulated.ts",
     "start:regulated": "tsx src/regulated.ts",
+    "start:authorize": "tsx src/authorize.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

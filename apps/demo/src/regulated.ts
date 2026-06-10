@@ -42,15 +42,22 @@ const PORT = 8788;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const AMOUNT = '250';
 const CLAWBACK = '50';
+const ADMIN_TOKEN = 'demo-admin-token';
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
   return (await res.json()) as T;
 }
+
+const admin = { authorization: `Bearer ${ADMIN_TOKEN}` };
 
 async function main(): Promise<void> {
   console.log('\n=== Trustline Onboarder — Mechanism C (REGULATED) via approval server ===');
@@ -90,6 +97,7 @@ async function main(): Promise<void> {
     network: NETWORK,
     horizonUrl: HORIZON_URL,
     assetCode: 'DEMO',
+    adminToken: ADMIN_TOKEN,
     port: PORT,
     host: '127.0.0.1',
   };
@@ -152,19 +160,27 @@ async function main(): Promise<void> {
     }
 
     logStep(`MiCA: issuer claws back ${CLAWBACK} DEMO from the recipient`);
-    const clawRes = await postJson<{ status: string; hash: string }>('/admin/clawback', {
-      from: recipient.publicKey(),
-      amount: CLAWBACK,
-      reason: 'regulatory order (demo)',
-    });
+    const clawRes = await postJson<{ status: string; hash: string }>(
+      '/admin/clawback',
+      {
+        from: recipient.publicKey(),
+        amount: CLAWBACK,
+        reason: 'regulatory order (demo)',
+      },
+      admin,
+    );
     const afterClaw = await assetBalance(recipient.publicKey(), asset);
     logOk(`clawback tx ${clawRes.hash?.slice(0, 8)}… — recipient DEMO now ${afterClaw?.balance}`);
 
     logStep('MiCA: issuer freezes the recipient (clears the AUTHORIZED flag)');
-    await postJson('/admin/freeze', {
-      trustor: recipient.publicKey(),
-      reason: 'suspected fraud (demo)',
-    });
+    await postJson(
+      '/admin/freeze',
+      {
+        trustor: recipient.publicKey(),
+        reason: 'suspected fraud (demo)',
+      },
+      admin,
+    );
     const frozen = await assetBalance(recipient.publicKey(), asset);
     logOk(`recipient trustline authorized=${frozen?.authorized} (frozen)`);
     if (frozen?.authorized !== false) throw new Error('expected the trustline to be frozen');
