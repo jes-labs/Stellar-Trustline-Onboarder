@@ -1,5 +1,4 @@
-import { DEMO_ADDRESS } from './config';
-import type { ActivationConfig, WalletId } from './types';
+import type { ActivationConfig, SelectedAsset } from './types';
 
 /** The edge states a backend can surface, named to match their screens. */
 export type ActivationErrorCode = 'failed' | 'kyc' | 'rejected' | 'expired' | 'no-wallet';
@@ -21,7 +20,8 @@ export interface ActivationResult {
 
 export interface ActivateInput {
   config: ActivationConfig;
-  walletId: WalletId;
+  /** The chosen asset (code + issuer). Null only in the URL-fixed path before a pick is needed. */
+  asset: SelectedAsset | null;
   address: string;
   /** Called once the wallet has approved and we move from "approve" to "processing". */
   onSubmitting: () => void;
@@ -34,8 +34,8 @@ export interface ActivateInput {
  * exactly where they belong: connect and sign in the browser, build and submit on the server.
  */
 export interface ActivationBackend {
-  /** Connect a wallet and return the user's address. Throws `no-wallet` when none is available. */
-  connect(walletId: WalletId): Promise<{ address: string }>;
+  /** Open the wallet modal and return the user's address and the chosen wallet's name. */
+  connect(): Promise<{ address: string; walletName: string }>;
   /** Build, request approval for, sign, and submit the activation transaction. */
   activate(input: ActivateInput): Promise<ActivationResult>;
 }
@@ -76,44 +76,79 @@ async function toActivationError(res: Response): Promise<ActivationError> {
 }
 
 /**
- * Default backend. Connecting and signing happen here in the browser; building, approval, and
- * submission go through Next API routes. The wallet pieces are stubbed (a demo address and an
- * approval pause) until the Freighter integration lands; the server routes simulate the chain.
+ * Default backend. The work is split exactly where it belongs: connecting a wallet and signing
+ * happen in the browser (via {@link connectWallet}/{@link signTransactionXdr}); building, issuer
+ * approval, and submission go through the Next API routes, which keep the sponsor key, approval
+ * URL, and Horizon config off the client.
+ *
+ *   build (server)  → returns the transaction already signed by the sponsor (and, for regulated
+ *                     assets, the issuer via the approval server)
+ *   sign  (browser) → the connected wallet adds the user's signature
+ *   submit (server) → submits to Horizon and returns the real hash
+ *
+ * When `config.simulate` is set the chain is bypassed entirely so QA can preview the edge screens
+ * by URL with no wallet — see {@link simulate}.
  */
 export class HttpBackend implements ActivationBackend {
-  async connect(_walletId: WalletId): Promise<{ address: string }> {
-    // TODO: replace with @stellar/freighter-api (getPublicKey); throw ActivationError('no-wallet')
-    // when no wallet is injected.
-    await new Promise((r) => setTimeout(r, 400));
-    return { address: DEMO_ADDRESS };
+  async connect(): Promise<{ address: string; walletName: string }> {
+    const { connectWallet } = await import('./walletKit');
+    return connectWallet();
   }
 
   async activate(input: ActivateInput): Promise<ActivationResult> {
-    const { config, address, walletId, onSubmitting, signal } = input;
+    if (input.config.simulate) return this.simulate(input);
 
-    if (config.simulate === 'no-wallet') throw new ActivationError('no-wallet');
+    const { config, asset, address, onSubmitting, signal } = input;
 
-    // Server builds the unsigned transaction and runs the issuer approval (SEP-8) for regulated
-    // assets. KYC and compliance outcomes come back here.
+    // Server builds the transaction and runs the issuer approval (SEP-8) for regulated assets,
+    // then signs as the sponsor. KYC and compliance outcomes come back here. It returns the XDR
+    // the wallet still needs to add the user's signature to.
     const buildRes = await fetch('/api/activation/build', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ config, address, walletId }),
+      body: JSON.stringify({ config, asset, address }),
       signal,
     });
     if (!buildRes.ok) throw await toActivationError(buildRes);
     const { xdr } = (await buildRes.json()) as { xdr: string };
 
-    // Wallet-approval window. The real build signs `xdr` with the connected wallet here.
-    await delay(2400, signal);
+    // The connected wallet adds the user's signature. This is the approval the user sees.
+    const { signTransactionXdr } = await import('./walletKit');
+    const signedXdr = await signTransactionXdr(xdr, address);
+    if (signal.aborted) throw new DOMException('aborted', 'AbortError');
     onSubmitting();
-    const signedXdr = xdr;
 
     // Server submits to Horizon. Network outcomes (failure, expired claim) come back here.
     const submitRes = await fetch('/api/activation/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ config, signedXdr }),
+      signal,
+    });
+    if (!submitRes.ok) throw await toActivationError(submitRes);
+    return (await submitRes.json()) as ActivationResult;
+  }
+
+  /** QA-only path: drive the routes' `simulate` override without touching a wallet or the chain. */
+  private async simulate(input: ActivateInput): Promise<ActivationResult> {
+    const { config, asset, address, onSubmitting, signal } = input;
+    if (config.simulate === 'no-wallet') throw new ActivationError('no-wallet');
+
+    const buildRes = await fetch('/api/activation/build', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ config, asset, address }),
+      signal,
+    });
+    if (!buildRes.ok) throw await toActivationError(buildRes);
+
+    await delay(2400, signal);
+    onSubmitting();
+
+    const submitRes = await fetch('/api/activation/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ config, signedXdr: 'SIMULATED' }),
       signal,
     });
     if (!submitRes.ok) throw await toActivationError(submitRes);

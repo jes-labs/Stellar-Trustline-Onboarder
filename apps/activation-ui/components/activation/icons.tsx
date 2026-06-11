@@ -1,6 +1,5 @@
 import { memo, type ReactNode } from 'react';
 import type { StatusIcon } from '../../lib/statusScreens';
-import type { WalletIconName } from '../../lib/wallets';
 
 export interface GlyphProps {
   size?: number;
@@ -160,6 +159,19 @@ export const CopyIcon = memo(function CopyIcon({
   );
 });
 
+export const SearchIcon = memo(function SearchIcon({
+  size = 17,
+  strokeWidth = 1.9,
+  className,
+}: GlyphProps) {
+  return (
+    <Svg size={size} strokeWidth={strokeWidth} className={className}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </Svg>
+  );
+});
+
 export const ImageIcon = memo(function ImageIcon({
   size = 15,
   strokeWidth = 1.8,
@@ -254,13 +266,6 @@ const SpinnerIcon = memo(function SpinnerIcon() {
     </svg>
   );
 });
-
-/** Render a wallet's icon by name. */
-export function WalletGlyph({ icon, size }: { icon: WalletIconName; size?: number }) {
-  if (icon === 'phone') return <PhoneIcon size={size} />;
-  if (icon === 'plus') return <PlusIcon size={size} />;
-  return <WalletIcon size={size} />;
-}
 
 /** Render a status badge glyph by name, at the size the badge expects. */
 export function StatusGlyph({ name }: { name: StatusIcon }) {

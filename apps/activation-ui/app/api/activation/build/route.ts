@@ -1,44 +1,168 @@
+import {
+  type AssetRef,
+  type BuiltTransaction,
+  buildAuthorize,
+  buildClaimRegulated,
+  buildClaimUnregulated,
+  horizon,
+  loadAccount,
+  parseTransaction,
+} from '@trustline-onboarder/core';
 import { NextResponse } from 'next/server';
-import type { ActivationConfig } from '../../../../lib/types';
+import {
+  APPROVAL_SERVER_URL,
+  HORIZON_URL,
+  IS_TESTNET,
+  NETWORK_PASSPHRASE,
+  sponsorKeypair,
+  sponsorPublicKey,
+} from '../../../../lib/serverStellar';
+import type { ActivationConfig, SelectedAsset } from '../../../../lib/types';
 
 export const runtime = 'nodejs';
 
 interface BuildBody {
   config?: ActivationConfig;
+  asset?: SelectedAsset | null;
   address?: string;
-  walletId?: string;
+}
+
+function fail(code: string, message: string, status: number): NextResponse {
+  return NextResponse.json({ code, message }, { status });
+}
+
+/** Whether the issuer enforces AUTH_REQUIRED — authoritative, read from the account's flags. */
+async function isRegulated(issuer: string, hint: boolean): Promise<boolean> {
+  try {
+    const account = await horizon(HORIZON_URL).loadAccount(issuer);
+    return account.flags?.auth_required === true;
+  } catch {
+    // If the issuer lookup fails, trust the hint the picker already derived from Horizon.
+    return hint;
+  }
+}
+
+/** Load the recipient account; on testnet, Friendbot-fund it first if it does not exist yet. */
+async function loadRecipient(address: string) {
+  try {
+    return await loadAccount(HORIZON_URL, address);
+  } catch {
+    if (!IS_TESTNET) throw new Error('account not found');
+    const res = await fetch(`https://friendbot.stellar.org?addr=${encodeURIComponent(address)}`);
+    if (!res.ok) throw new Error('could not fund account');
+    return await loadAccount(HORIZON_URL, address);
+  }
 }
 
 /**
- * Build the unsigned activation transaction and run the issuer approval for regulated assets.
+ * Build the activation transaction, run the issuer approval for regulated assets, and sign as the
+ * sponsor. Returns the XDR the connected wallet still needs to sign with the user's key.
  *
- * Real implementation: construct the sponsored claim/authorize transaction with
- * `@trustline-onboarder/core`, and for a regulated asset POST it to the issuer's SEP-8 approval
- * server, mapping `action_required` to KYC and `rejected` to compliance. It returns the XDR the
- * browser then signs. For now it returns a placeholder and honours the `simulate` override.
+ *   - no claimable balance → Mechanism A (`buildAuthorize`): a sponsored trustline
+ *   - a claimable balance   → Mechanism C (`buildClaim*`): sponsored trustline + claim
+ *
+ * Regulated (AUTH_REQUIRED) assets need the issuer's signature. We can only obtain it for an asset
+ * whose approval server we run (`APPROVAL_SERVER_URL`); for any other regulated asset we cannot
+ * self-authorize, so the user is routed to verification (`kyc`).
  */
 export async function POST(request: Request): Promise<NextResponse> {
   let body: BuildBody;
   try {
     body = (await request.json()) as BuildBody;
   } catch {
-    return NextResponse.json({ code: 'failed', message: 'invalid request body' }, { status: 400 });
+    return fail('failed', 'invalid request body', 400);
   }
 
-  if (!body.config || !body.address) {
-    return NextResponse.json(
-      { code: 'failed', message: 'missing config or address' },
-      { status: 400 },
-    );
-  }
+  const config = body.config;
+  if (!config || !body.address) return fail('failed', 'missing config or address', 400);
 
-  const simulate = body.config.simulate;
-  if (simulate === 'kyc') {
-    return NextResponse.json({ code: 'kyc' }, { status: 422 });
-  }
-  if (simulate === 'rejected') {
+  // QA override: preview KYC / compliance edge screens without touching the chain.
+  if (config.simulate === 'kyc') return NextResponse.json({ code: 'kyc' }, { status: 422 });
+  if (config.simulate === 'rejected')
     return NextResponse.json({ code: 'rejected' }, { status: 422 });
-  }
 
-  return NextResponse.json({ xdr: 'UNSIGNED_TRANSACTION_PLACEHOLDER' });
+  const code = body.asset?.code ?? config.assetCode;
+  const issuer = body.asset?.issuer ?? config.issuer;
+  if (!issuer) return fail('failed', 'missing asset issuer', 400);
+
+  const asset: AssetRef = { code, issuer };
+  const recipient = body.address;
+  const sponsor = sponsorPublicKey();
+
+  let built: BuiltTransaction;
+  try {
+    const recipientAccount = await loadRecipient(recipient);
+    const regulated = await isRegulated(issuer, body.asset?.regulated ?? false);
+
+    if (config.balanceId) {
+      built = regulated
+        ? buildClaimRegulated(
+            { asset, recipient, sponsor, balanceId: config.balanceId },
+            recipientAccount,
+            NETWORK_PASSPHRASE,
+          )
+        : buildClaimUnregulated(
+            { asset, recipient, sponsor, balanceId: config.balanceId },
+            recipientAccount,
+            NETWORK_PASSPHRASE,
+          );
+    } else {
+      built = buildAuthorize(
+        {
+          asset,
+          profile: regulated ? 'regulated' : 'unregulated',
+          user: recipient,
+          sponsor,
+        },
+        recipientAccount,
+        NETWORK_PASSPHRASE,
+      );
+    }
+
+    // Regulated assets carry an issuer authorization op that only the issuer can sign.
+    let xdr = built.xdr;
+    if (built.issuerAuthOpIndex !== undefined) {
+      if (!APPROVAL_SERVER_URL) {
+        // Not an asset we can authorize — the user must verify with the issuer/platform.
+        return NextResponse.json({ code: 'kyc' }, { status: 422 });
+      }
+      xdr = await runApproval(xdr);
+    }
+
+    // Sign as the sponsor (who pays the reserve). The wallet adds the user's signature next.
+    const tx = parseTransaction(xdr, NETWORK_PASSPHRASE);
+    tx.sign(sponsorKeypair());
+    return NextResponse.json({ xdr: tx.toXDR() });
+  } catch (err) {
+    if (err instanceof ApprovalRedirect) {
+      return NextResponse.json({ code: err.code }, { status: 422 });
+    }
+    const message = err instanceof Error ? err.message : 'build failed';
+    return fail('failed', message, 502);
+  }
+}
+
+/**
+ * Hand a regulated transaction to the SEP-8 approval server for the issuer's signature.
+ * Throws an {@link ApprovalRedirect} carrying the screen code for non-success statuses.
+ */
+async function runApproval(xdr: string): Promise<string> {
+  const res = await fetch(`${APPROVAL_SERVER_URL}/tx-approve`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tx: xdr }),
+  });
+  const result = (await res.json()) as { status?: string; tx?: string };
+  if ((result.status === 'success' || result.status === 'revised') && result.tx) {
+    return result.tx;
+  }
+  if (result.status === 'rejected') throw new ApprovalRedirect('rejected');
+  throw new ApprovalRedirect('kyc');
+}
+
+/** Internal signal that the approval server returned a non-success status mapped to a screen. */
+class ApprovalRedirect extends Error {
+  constructor(readonly code: 'kyc' | 'rejected') {
+    super(code);
+  }
 }

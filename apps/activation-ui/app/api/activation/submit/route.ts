@@ -1,22 +1,29 @@
-import { randomBytes } from 'node:crypto';
+import { parseTransaction, submit } from '@trustline-onboarder/core';
 import { NextResponse } from 'next/server';
+import { HORIZON_URL, IS_TESTNET, NETWORK_PASSPHRASE } from '../../../../lib/serverStellar';
 import type { ActivationConfig } from '../../../../lib/types';
 
 export const runtime = 'nodejs';
 
-const EXPLORER_TX = 'https://stellar.expert/explorer/testnet/tx/';
+const EXPLORER_TX = IS_TESTNET
+  ? 'https://stellar.expert/explorer/testnet/tx/'
+  : 'https://stellar.expert/explorer/public/tx/';
 
 interface SubmitBody {
   config?: ActivationConfig;
   signedXdr?: string;
 }
 
+/** Horizon surfaces operation result codes here on a failed submission. */
+interface HorizonErrorBody {
+  extras?: { result_codes?: { transaction?: string; operations?: string[] } };
+}
+
 /**
- * Submit the signed activation transaction to the network.
+ * Submit the fully-signed activation transaction to Horizon and return its hash.
  *
- * Real implementation: submit `signedXdr` to Horizon and return the resulting hash, mapping a
- * failed claim predicate to "expired" and any other failure to the generic error. For now it
- * waits to mimic settlement and honours the `simulate` override.
+ * A claim against an expired/unavailable claimable balance maps to the "expired" screen; any
+ * other failure maps to the generic error. Both leave the user un-charged for the reserve.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   let body: SubmitBody;
@@ -33,17 +40,32 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // QA override: preview network edge screens without touching the chain.
   const simulate = body.config?.simulate;
-  if (simulate === 'expired') {
-    return NextResponse.json({ code: 'expired' }, { status: 410 });
-  }
-  if (simulate === 'failed') {
-    return NextResponse.json({ code: 'failed' }, { status: 502 });
+  if (simulate === 'expired') return NextResponse.json({ code: 'expired' }, { status: 410 });
+  if (simulate === 'failed') return NextResponse.json({ code: 'failed' }, { status: 502 });
+  if (body.signedXdr === 'SIMULATED') {
+    const fake = `${'0'.repeat(8)}simulated${'0'.repeat(47)}`.slice(0, 64);
+    return NextResponse.json({ txHash: fake, explorerUrl: `${EXPLORER_TX}${fake}` });
   }
 
-  // Mimic network settlement so the processing state is visible.
-  await new Promise((resolve) => setTimeout(resolve, 1400));
+  try {
+    const tx = parseTransaction(body.signedXdr, NETWORK_PASSPHRASE);
+    const result = await submit(HORIZON_URL, tx);
+    return NextResponse.json({ txHash: result.hash, explorerUrl: `${EXPLORER_TX}${result.hash}` });
+  } catch (err) {
+    return NextResponse.json(mapSubmitError(err), { status: 502 });
+  }
+}
 
-  const txHash = randomBytes(32).toString('hex');
-  return NextResponse.json({ txHash, explorerUrl: `${EXPLORER_TX}${txHash}` });
+/** Map a Horizon submission failure to a screen code. */
+function mapSubmitError(err: unknown): { code: string; message: string } {
+  const response = (err as { response?: { data?: HorizonErrorBody } })?.response?.data;
+  const opCodes = response?.extras?.result_codes?.operations ?? [];
+  // A claim op against a missing/expired balance returns these codes.
+  const expired = opCodes.some(
+    (c) => c === 'op_does_not_exist' || c === 'op_claimable_balance_not_found',
+  );
+  if (expired) return { code: 'expired', message: 'claimable balance no longer available' };
+  return { code: 'failed', message: 'submission failed' };
 }

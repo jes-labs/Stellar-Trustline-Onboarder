@@ -2,21 +2,20 @@
 
 import { useState } from 'react';
 import { truncateAddress } from '../../../lib/format';
-import type { WalletDef } from '../../../lib/wallets';
 import { PrimaryButton } from '../buttons';
 import { CopyButton } from '../CopyButton';
-import { ArrowDownIcon, BoltIcon, WalletGlyph } from '../icons';
+import { ArrowDownIcon, BoltIcon, WalletIcon } from '../icons';
 
 export function Review({
   asset,
   amount,
-  wallet,
+  walletName,
   address,
   onActivate,
 }: {
   asset: string;
   amount: string;
-  wallet: WalletDef;
+  walletName: string;
   address: string;
   onActivate: () => void;
 }) {
@@ -90,14 +89,11 @@ export function Review({
       </div>
 
       <div className="mt-3 mb-[22px] flex items-center gap-[11px] rounded-[14px] border border-border px-[14px] py-3">
-        <span
-          className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px]"
-          style={{ background: wallet.bg, color: wallet.fg }}
-        >
-          <WalletGlyph icon={wallet.icon} />
+        <span className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-tint-indigo text-indigo">
+          <WalletIcon size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[12.5px] font-semibold">{wallet.name}</div>
+          <div className="text-[12.5px] font-semibold">{walletName}</div>
           <div className="mt-[1px] font-mono text-[12px] text-muted">
             {truncateAddress(address)}
           </div>

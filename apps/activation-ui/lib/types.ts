@@ -1,6 +1,7 @@
 /** Every screen the activation page can show, keyed by a single string. */
 export type Screen =
   | 'welcome'
+  | 'selectAsset'
   | 'connect'
   | 'review'
   | 'approve'
@@ -12,8 +13,29 @@ export type Screen =
   | 'expired'
   | 'no-wallet';
 
-/** The wallet options offered on the connect step. */
-export type WalletId = 'freighter' | 'mobile' | 'other';
+/**
+ * A concrete asset the user is activating: a code plus the specific issuer that mints it. The
+ * code alone is ambiguous (many issuers mint "USDC"), so the issuer is what the trustline points
+ * at. `regulated` (issuer AUTH_REQUIRED) is informational for the UI; the build route re-checks
+ * it against Horizon before choosing how to build.
+ */
+export interface SelectedAsset {
+  code: string;
+  issuer: string;
+  regulated: boolean;
+}
+
+/** One row in the asset picker, as returned by `/api/activation/assets`. */
+export interface AssetOption {
+  code: string;
+  issuer: string;
+  /** AUTH_REQUIRED — needs the issuer's approval to activate, so not self-serviceable here. */
+  regulated: boolean;
+  /** Total trustlines on this asset, for ranking and a sense of which issuer is "the" one. */
+  holders: number;
+  /** Home domain from the asset's stellar.toml link, when present. */
+  domain?: string;
+}
 
 /**
  * Per-session configuration. An exchange or broker sets these on the redirect URL; the page
