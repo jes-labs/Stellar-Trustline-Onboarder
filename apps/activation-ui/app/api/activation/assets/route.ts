@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '../../../../lib/guard';
 import type { AssetOption } from '../../../../lib/types';
 
 export const runtime = 'nodejs';
@@ -42,6 +43,9 @@ function tomlDomain(href?: string): string | undefined {
  * characters of `[A-Za-z0-9]`, so anything else is rejected before it reaches Horizon.
  */
 export async function GET(request: Request): Promise<NextResponse> {
+  const blocked = guard(request, 40);
+  if (blocked) return blocked;
+
   const url = new URL(request.url);
   const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
 

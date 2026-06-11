@@ -1,0 +1,23 @@
+{
+  "name": "@trustline-onboarder/example-wallet",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sample wallet that adopts @trustline-onboarder/sdk to onboard a user into a Stellar asset",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/wallet.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "15.1.0",
+    "@trustline-onboarder/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}

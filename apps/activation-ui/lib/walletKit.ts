@@ -12,8 +12,12 @@ import { ActivationError } from './backend';
  * server bundle.
  */
 
-/** Testnet passphrase. Hard-coded so this client module needs no `@trustline-onboarder/core` import. */
-const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
+// Network passphrases, inlined so this client module needs no `@trustline-onboarder/core` import.
+// `NEXT_PUBLIC_STELLAR_NETWORK` selects public vs testnet; defaults to testnet.
+const IS_PUBLIC = process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'public';
+const NETWORK_PASSPHRASE = IS_PUBLIC
+  ? 'Public Global Stellar Network ; September 2015'
+  : 'Test SDF Network ; September 2015';
 
 interface KitContext {
   kit: typeof import('@creit.tech/stellar-wallets-kit').StellarWalletsKit;
@@ -29,6 +33,7 @@ function browserOnly(): void {
 
 async function initKit(): Promise<KitContext> {
   const { StellarWalletsKit, Networks } = await import('@creit.tech/stellar-wallets-kit');
+  const network = IS_PUBLIC ? Networks.PUBLIC : Networks.TESTNET;
 
   const [freighter, xbull, albedo, rabet, lobstr] = await Promise.all([
     import('@creit.tech/stellar-wallets-kit/modules/freighter'),
@@ -39,7 +44,7 @@ async function initKit(): Promise<KitContext> {
   ]);
 
   StellarWalletsKit.init({
-    network: Networks.TESTNET,
+    network,
     modules: [
       new freighter.FreighterModule(),
       new xbull.xBullModule(),
@@ -84,7 +89,7 @@ export async function signTransactionXdr(xdr: string, address: string): Promise<
   const { kit } = await loadKit();
   try {
     const { signedTxXdr } = await kit.signTransaction(xdr, {
-      networkPassphrase: TESTNET_PASSPHRASE,
+      networkPassphrase: NETWORK_PASSPHRASE,
       address,
     });
     return signedTxXdr;

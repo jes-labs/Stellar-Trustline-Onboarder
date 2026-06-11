@@ -1,5 +1,6 @@
 import { parseTransaction, submit } from '@trustline-onboarder/core';
 import { NextResponse } from 'next/server';
+import { guard } from '../../../../lib/guard';
 import { HORIZON_URL, IS_TESTNET, NETWORK_PASSPHRASE } from '../../../../lib/serverStellar';
 import type { ActivationConfig } from '../../../../lib/types';
 
@@ -26,6 +27,9 @@ interface HorizonErrorBody {
  * other failure maps to the generic error. Both leave the user un-charged for the reserve.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const blocked = guard(request, 10);
+  if (blocked) return blocked;
+
   let body: SubmitBody;
   try {
     body = (await request.json()) as SubmitBody;

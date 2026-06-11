@@ -9,6 +9,7 @@ import {
   parseTransaction,
 } from '@trustline-onboarder/core';
 import { NextResponse } from 'next/server';
+import { guard } from '../../../../lib/guard';
 import {
   APPROVAL_SERVER_URL,
   HORIZON_URL,
@@ -66,6 +67,9 @@ async function loadRecipient(address: string) {
  * self-authorize, so the user is routed to verification (`kyc`).
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const blocked = guard(request, 10);
+  if (blocked) return blocked;
+
   let body: BuildBody;
   try {
     body = (await request.json()) as BuildBody;

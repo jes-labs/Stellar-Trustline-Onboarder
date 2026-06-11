@@ -57,6 +57,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@22.18.10)(vite@8.0.16(@types/node@22.18.10)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4))
 
   apps/approval-server:
     dependencies:
@@ -100,6 +103,53 @@ importers:
       '@trustline-onboarder/core':
         specifier: workspace:*
         version: link:../../packages/core
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.10
+        version: 22.18.10
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@22.18.10)(vite@8.0.16(@types/node@22.18.10)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4))
+
+  examples/exchange-integration:
+    dependencies:
+      '@stellar/stellar-sdk':
+        specifier: 15.1.0
+        version: 15.1.0
+      '@trustline-onboarder/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@trustline-onboarder/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.10
+        version: 22.18.10
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@22.18.10)(vite@8.0.16(@types/node@22.18.10)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4))
+
+  examples/wallet-integration:
+    dependencies:
+      '@stellar/stellar-sdk':
+        specifier: 15.1.0
+        version: 15.1.0
+      '@trustline-onboarder/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
     devDependencies:
       '@types/node':
         specifier: 22.18.10

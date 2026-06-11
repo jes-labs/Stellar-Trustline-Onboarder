@@ -1,18 +1,23 @@
 import 'server-only';
 import { Keypair } from '@stellar/stellar-sdk';
-import { TESTNET } from '@trustline-onboarder/core';
+import { PUBLIC, TESTNET } from '@trustline-onboarder/core';
 
 /**
  * Server-only Stellar configuration. The sponsor secret, Horizon URL, and approval-server URL
  * live here and never reach the client bundle (`server-only` makes a client import a build error).
+ *
+ * `STELLAR_NETWORK` (`testnet` | `public`) selects the network; `HORIZON_URL` can override the
+ * endpoint within it. Defaults to testnet so a fresh checkout runs with no configuration.
  */
 
-export const HORIZON_URL = process.env.HORIZON_URL ?? TESTNET.horizonUrl;
-export const NETWORK_PASSPHRASE = TESTNET.networkPassphrase;
-export const APPROVAL_SERVER_URL = process.env.APPROVAL_SERVER_URL;
+const NETWORK = process.env.STELLAR_NETWORK === 'public' ? PUBLIC : TESTNET;
 
 /** True on testnet, where we may Friendbot-fund a recipient account that does not exist yet. */
-export const IS_TESTNET = HORIZON_URL.includes('testnet');
+export const IS_TESTNET = NETWORK === TESTNET;
+
+export const HORIZON_URL = process.env.HORIZON_URL ?? NETWORK.horizonUrl;
+export const NETWORK_PASSPHRASE = NETWORK.networkPassphrase;
+export const APPROVAL_SERVER_URL = process.env.APPROVAL_SERVER_URL;
 
 let cachedSponsor: Keypair | null = null;
 

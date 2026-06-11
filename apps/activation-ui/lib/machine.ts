@@ -6,7 +6,7 @@ import { DEMO_ADDRESS } from './config';
 import type { StatusAction } from './statusScreens';
 import type { ActivationConfig, Screen, SelectedAsset } from './types';
 
-interface State {
+export interface State {
   screen: Screen;
   /** Display name of the connected wallet (from the kit's selected module); empty until connected. */
   walletName: string;
@@ -21,7 +21,7 @@ interface State {
   assetLocked: boolean;
 }
 
-type Action =
+export type Action =
   | { type: 'getStarted' }
   | { type: 'back' }
   | { type: 'goto'; screen: Screen }
@@ -34,7 +34,7 @@ type Action =
   | { type: 'submitting' }
   | { type: 'succeeded'; result: ActivationResult };
 
-function reducer(state: State, action: Action): State {
+export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'getStarted':
       // Skip the picker when the asset is fixed by the URL; otherwise choose it first.
