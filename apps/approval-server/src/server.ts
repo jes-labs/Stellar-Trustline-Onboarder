@@ -10,7 +10,8 @@
  */
 
 import { Keypair } from '@stellar/stellar-sdk';
-import { Pool } from 'pg';
+// pg is CommonJS; import the default and destructure so this works under the ESM entrypoint.
+import pg from 'pg';
 import { type BuildServerDeps, buildServer } from './app';
 import { configFromEnv } from './config';
 import { PostgresStore } from './store.postgres';
@@ -27,7 +28,7 @@ async function main(): Promise<void> {
 
   const deps: BuildServerDeps = {};
   if (config.databaseUrl) {
-    const store = new PostgresStore(new Pool({ connectionString: config.databaseUrl }));
+    const store = new PostgresStore(new pg.Pool({ connectionString: config.databaseUrl }));
     await store.init();
     deps.store = store;
     console.log('store:   Postgres');
