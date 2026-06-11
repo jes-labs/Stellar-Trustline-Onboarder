@@ -1,7 +1,7 @@
 {
   "name": "@trustline-onboarder/sdk",
-  "version": "0.0.0",
-  "description": "Adopter-facing SDK for wallets and exchanges — detect, onboard, verify (stub)",
+  "version": "0.1.0",
+  "description": "Adopter-facing SDK for wallets and brokers — detect, onboard, verify",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,6 +11,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "files": [
@@ -23,7 +31,8 @@
   },
   "dependencies": {
     "@stellar/stellar-sdk": "15.1.0",
-    "@trustline-onboarder/core": "workspace:*"
+    "@trustline-onboarder/core": "workspace:*",
+    "@trustline-onboarder/signer": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.18.10",

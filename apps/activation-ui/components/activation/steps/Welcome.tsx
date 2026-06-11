@@ -9,7 +9,8 @@ export const Welcome = memo(function Welcome({
   platform,
   onGetStarted,
 }: {
-  asset: string;
+  /** The asset code when fixed by the URL; null when the user has yet to pick one. */
+  asset: string | null;
   platform: string;
   onGetStarted: () => void;
 }) {
@@ -19,7 +20,7 @@ export const Welcome = memo(function Welcome({
         <div className="relative mb-5 h-20 w-20">
           <div className="absolute inset-0 grid place-items-center rounded-full bg-indigo shadow-asset">
             <span className="font-mono text-[19px] font-semibold tracking-[-0.02em] text-white">
-              {asset}
+              {asset ?? <StarIcon size={26} strokeWidth={2} />}
             </span>
           </div>
           <div className="absolute -right-[2px] -bottom-[2px] grid h-[29px] w-[29px] place-items-center rounded-full border border-border bg-card text-indigo">
@@ -31,10 +32,12 @@ export const Welcome = memo(function Welcome({
           Stellar asset
         </span>
         <h1 className="mb-[10px] text-balance font-heading text-[24px] leading-[1.2] font-bold tracking-[-0.02em]">
-          Activate {asset} to receive your withdrawal
+          {asset ? `Activate ${asset} to receive your withdrawal` : 'Activate your Stellar asset'}
         </h1>
         <p className="mb-[22px] max-w-[330px] text-[14.5px] leading-[1.55] text-muted">
-          One tap and your {asset} arrives in seconds. We have set this up so you pay nothing.
+          {asset
+            ? `One tap and your ${asset} arrives in seconds. We have set this up so you pay nothing.`
+            : 'Set up your wallet to receive a Stellar asset in seconds. We have set this up so you pay nothing.'}
         </p>
       </div>
 
