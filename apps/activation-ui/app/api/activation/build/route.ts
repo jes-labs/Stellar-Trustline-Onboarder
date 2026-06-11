@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { buildActivationTx, ChainError } from '../../../../lib/chain';
+import { isLiveConfigured } from '../../../../lib/server-config';
 import type { ActivationConfig } from '../../../../lib/types';
 
 export const runtime = 'nodejs';
@@ -6,16 +8,12 @@ export const runtime = 'nodejs';
 interface BuildBody {
   config?: ActivationConfig;
   address?: string;
-  walletId?: string;
 }
 
 /**
  * Build the unsigned activation transaction and run the issuer approval for regulated assets.
- *
- * Real implementation: construct the sponsored claim/authorize transaction with
- * `@trustline-onboarder/core`, and for a regulated asset POST it to the issuer's SEP-8 approval
- * server, mapping `action_required` to KYC and `rejected` to compliance. It returns the XDR the
- * browser then signs. For now it returns a placeholder and honours the `simulate` override.
+ * Returns the XDR (sponsor- and, if regulated, issuer-signed) for the browser to sign. When the
+ * chain is not configured, returns a placeholder and the route simulates.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   let body: BuildBody;
@@ -32,13 +30,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // QA previews of the approval-time edge states.
   const simulate = body.config.simulate;
-  if (simulate === 'kyc') {
-    return NextResponse.json({ code: 'kyc' }, { status: 422 });
-  }
-  if (simulate === 'rejected') {
-    return NextResponse.json({ code: 'rejected' }, { status: 422 });
+  if (simulate === 'kyc') return NextResponse.json({ code: 'kyc' }, { status: 422 });
+  if (simulate === 'rejected') return NextResponse.json({ code: 'rejected' }, { status: 422 });
+
+  if (!isLiveConfigured()) {
+    return NextResponse.json({
+      xdr: 'UNSIGNED_TRANSACTION_PLACEHOLDER',
+      networkPassphrase: 'SIMULATED',
+      simulated: true,
+    });
   }
 
-  return NextResponse.json({ xdr: 'UNSIGNED_TRANSACTION_PLACEHOLDER' });
+  try {
+    const { xdr, networkPassphrase } = await buildActivationTx(body.config, body.address);
+    return NextResponse.json({ xdr, networkPassphrase, simulated: false });
+  } catch (err) {
+    if (err instanceof ChainError) return NextResponse.json({ code: err.code }, { status: 422 });
+    return NextResponse.json({ code: 'failed' }, { status: 500 });
+  }
 }

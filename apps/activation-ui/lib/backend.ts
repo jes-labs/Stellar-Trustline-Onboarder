@@ -1,8 +1,5 @@
 import { DEMO_ADDRESS } from './config';
-import type { ActivationConfig, WalletId } from './types';
-
-/** The edge states a backend can surface, named to match their screens. */
-export type ActivationErrorCode = 'failed' | 'kyc' | 'rejected' | 'expired' | 'no-wallet';
+import type { ActivationConfig, ActivationErrorCode, WalletId } from './types';
 
 export class ActivationError extends Error {
   constructor(
@@ -30,8 +27,8 @@ export interface ActivateInput {
 
 /**
  * The seam between the UI and the chain. The page drives the flow against this interface and
- * never builds or submits a transaction itself. A real implementation keeps the three steps
- * exactly where they belong: connect and sign in the browser, build and submit on the server.
+ * never builds or submits a transaction itself. Connecting and signing happen in the browser;
+ * building, approval, and submission go through the Next API routes.
  */
 export interface ActivationBackend {
   /** Connect a wallet and return the user's address. Throws `no-wallet` when none is available. */
@@ -39,6 +36,10 @@ export interface ActivationBackend {
   /** Build, request approval for, sign, and submit the activation transaction. */
   activate(input: ActivateInput): Promise<ActivationResult>;
 }
+
+// In a live deployment the server is configured for the chain and this enables the real wallet.
+// Left unset, the whole flow simulates so the app runs locally with no wallet or secrets.
+const LIVE = process.env.NEXT_PUBLIC_ACTIVATION_MODE === 'live';
 
 const KNOWN_CODES: ReadonlySet<string> = new Set([
   'failed',
@@ -75,41 +76,48 @@ async function toActivationError(res: Response): Promise<ActivationError> {
   return new ActivationError(code as ActivationErrorCode);
 }
 
+interface BuildResponse {
+  xdr: string;
+  networkPassphrase: string;
+  simulated?: boolean;
+}
+
 /**
- * Default backend. Connecting and signing happen here in the browser; building, approval, and
- * submission go through Next API routes. The wallet pieces are stubbed (a demo address and an
- * approval pause) until the Freighter integration lands; the server routes simulate the chain.
+ * Default backend. Connecting and signing use Freighter in the browser; building, approval, and
+ * submission go through the Next API routes. When the deployment is not live (or the server is
+ * simulating), the wallet steps are stood in for so the flow still runs end to end.
  */
 export class HttpBackend implements ActivationBackend {
   async connect(_walletId: WalletId): Promise<{ address: string }> {
-    // TODO: replace with @stellar/freighter-api (getPublicKey); throw ActivationError('no-wallet')
-    // when no wallet is injected.
-    await new Promise((r) => setTimeout(r, 400));
-    return { address: DEMO_ADDRESS };
+    if (!LIVE) {
+      await new Promise((r) => setTimeout(r, 400));
+      return { address: DEMO_ADDRESS };
+    }
+    const freighter = await import('@stellar/freighter-api');
+    const connection = await freighter.isConnected();
+    if (!connection.isConnected) throw new ActivationError('no-wallet');
+    const access = await freighter.requestAccess();
+    if (access.error) throw new ActivationError('failed', access.error.message);
+    return { address: access.address };
   }
 
   async activate(input: ActivateInput): Promise<ActivationResult> {
-    const { config, address, walletId, onSubmitting, signal } = input;
+    const { config, address, onSubmitting, signal } = input;
 
     if (config.simulate === 'no-wallet') throw new ActivationError('no-wallet');
 
-    // Server builds the unsigned transaction and runs the issuer approval (SEP-8) for regulated
-    // assets. KYC and compliance outcomes come back here.
     const buildRes = await fetch('/api/activation/build', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ config, address, walletId }),
+      body: JSON.stringify({ config, address }),
       signal,
     });
     if (!buildRes.ok) throw await toActivationError(buildRes);
-    const { xdr } = (await buildRes.json()) as { xdr: string };
+    const build = (await buildRes.json()) as BuildResponse;
 
-    // Wallet-approval window. The real build signs `xdr` with the connected wallet here.
-    await delay(2400, signal);
+    const signedXdr = await this.sign(build, address, signal);
+
     onSubmitting();
-    const signedXdr = xdr;
-
-    // Server submits to Horizon. Network outcomes (failure, expired claim) come back here.
     const submitRes = await fetch('/api/activation/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -118,5 +126,21 @@ export class HttpBackend implements ActivationBackend {
     });
     if (!submitRes.ok) throw await toActivationError(submitRes);
     return (await submitRes.json()) as ActivationResult;
+  }
+
+  // The approve step. With a real transaction the wallet popup is the wait; otherwise we pause to
+  // stand in for it.
+  private async sign(build: BuildResponse, address: string, signal: AbortSignal): Promise<string> {
+    if (!LIVE || build.simulated) {
+      await delay(2400, signal);
+      return build.xdr;
+    }
+    const freighter = await import('@stellar/freighter-api');
+    const signed = await freighter.signTransaction(build.xdr, {
+      networkPassphrase: build.networkPassphrase,
+      address,
+    });
+    if (signed.error) throw new ActivationError('failed', signed.error.message);
+    return signed.signedTxXdr;
   }
 }
