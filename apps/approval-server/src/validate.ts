@@ -14,6 +14,10 @@ const ALLOWED_OPS = new Set([
   'createClaimableBalance',
 ]);
 
+// An onboarding transaction is a handful of operations. A generous ceiling rejects anything
+// pathological before the issuer signature is even considered.
+const MAX_OPERATIONS = 50;
+
 export interface ValidationOk {
   ok: true;
   /** Trustors the issuer is being asked to authorize (subject to a compliance check). */
@@ -33,6 +37,17 @@ export type ValidationResult = ValidationOk | ValidationError;
  *  - returns the list of trustors being authorized so the caller can run a compliance check.
  */
 export function validateOnboardingTx(tx: Transaction, issuer: string): ValidationResult {
+  if (tx.operations.length > MAX_OPERATIONS) {
+    return { ok: false, reason: `too many operations: ${tx.operations.length}` };
+  }
+
+  // Require an expiry. The issuer's signature must not be replayable forever, and every builder
+  // here sets a timeout. A missing or zero maxTime means the transaction never expires.
+  const maxTime = tx.timeBounds?.maxTime;
+  if (!maxTime || maxTime === '0') {
+    return { ok: false, reason: 'transaction must have a maxTime (expiry) set' };
+  }
+
   const authorizedTrustors: string[] = [];
 
   for (const op of tx.operations) {
