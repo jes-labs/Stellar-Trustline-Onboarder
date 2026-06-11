@@ -36,6 +36,33 @@ import {
 const PORT = 8789;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const ADMIN_TOKEN = 'demo-admin-token';
+const admin = { authorization: `Bearer ${ADMIN_TOKEN}` };
+
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  return (await res.json()) as T;
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  return (await (await fetch(`${BASE_URL}${path}`)).json()) as T;
+}
+
+/** Complete SEP-10: fetch a challenge, sign it, exchange it for a session token. */
+async function authenticate(kp: Keypair): Promise<{ authorization: string }> {
+  const { transaction } = await getJson<{ transaction: string }>(`/auth?account=${kp.publicKey()}`);
+  const signed = parseTransaction(transaction, NETWORK);
+  signed.sign(kp);
+  const { token } = await postJson<{ token: string }>('/auth', { transaction: signed.toXDR() });
+  return { authorization: `Bearer ${token}` };
+}
 
 async function main(): Promise<void> {
   console.log('\n=== Trustline Onboarder — Mechanism A (REGULATED, hold-before-receiving) ===');
@@ -66,12 +93,20 @@ async function main(): Promise<void> {
     horizonUrl: HORIZON_URL,
     assetCode: 'DEMO',
     adminToken: ADMIN_TOKEN,
+    homeDomain: 'localhost',
+    webAuthDomain: 'localhost',
+    jwtSecret: 'demo-jwt-secret',
     port: PORT,
     host: '127.0.0.1',
   };
   const { app } = buildServer(config);
   await app.listen({ port: PORT, host: '127.0.0.1' });
   logOk('approval server up');
+
+  logStep('Approving the user KYC (admin) and authenticating the user (SEP-10)');
+  await postJson('/admin/kyc', { account: user.publicKey(), status: 'approved' }, admin);
+  const session = await authenticate(user);
+  logOk('user KYC approved and session authenticated');
 
   try {
     const userXlmBefore = await xlmBalance(user.publicKey());
@@ -91,11 +126,7 @@ async function main(): Promise<void> {
     logInfo(`issuer-auth op index: ${built.issuerAuthOpIndex}`);
 
     logStep('Requesting issuer approval');
-    const approval = await fetch(`${BASE_URL}/tx-approve`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tx: built.xdr }),
-    }).then((r) => r.json() as Promise<ApprovalResult>);
+    const approval = await postJson<ApprovalResult>('/tx-approve', { tx: built.xdr }, session);
     if (approval.status !== 'revised' || !approval.tx) {
       throw new Error(`unexpected approval status: ${approval.status} ${approval.message ?? ''}`);
     }

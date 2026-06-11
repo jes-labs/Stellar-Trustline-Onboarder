@@ -38,6 +38,7 @@ export interface BuildResult {
 export async function buildActivationTx(
   config: ActivationConfig,
   address: string,
+  sessionToken?: string,
 ): Promise<BuildResult> {
   const cfg = serverChainConfig();
   if (!config.issuer) throw new ChainError('failed', 'missing asset issuer');
@@ -73,7 +74,7 @@ export async function buildActivationTx(
 
   let xdr = built.xdr;
   if (regulated && cfg.approvalServerUrl) {
-    xdr = await requestIssuerApproval(cfg.approvalServerUrl, xdr);
+    xdr = await requestIssuerApproval(cfg.approvalServerUrl, xdr, sessionToken);
   }
 
   const tx = parseTransaction(xdr, cfg.network);
@@ -82,10 +83,16 @@ export async function buildActivationTx(
 }
 
 /** Send the transaction to the issuer's SEP-8 approval server and return the issuer-signed XDR. */
-async function requestIssuerApproval(approvalServerUrl: string, xdr: string): Promise<string> {
+async function requestIssuerApproval(
+  approvalServerUrl: string,
+  xdr: string,
+  sessionToken?: string,
+): Promise<string> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (sessionToken) headers.authorization = `Bearer ${sessionToken}`;
   const res = await fetch(`${approvalServerUrl.replace(/\/$/, '')}/tx-approve`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({ tx: xdr }),
   });
   const result = (await res.json()) as { status?: string; tx?: string };

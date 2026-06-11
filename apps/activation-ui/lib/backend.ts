@@ -106,9 +106,15 @@ export class HttpBackend implements ActivationBackend {
 
     if (config.simulate === 'no-wallet') throw new ActivationError('no-wallet');
 
+    // In live mode, authenticate the account via SEP-10 and bind the build request to it.
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (LIVE) {
+      headers.authorization = `Bearer ${await this.authenticate(address)}`;
+    }
+
     const buildRes = await fetch('/api/activation/build', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({ config, address }),
       signal,
     });
@@ -142,5 +148,31 @@ export class HttpBackend implements ActivationBackend {
     });
     if (signed.error) throw new ActivationError('failed', signed.error.message);
     return signed.signedTxXdr;
+  }
+
+  // SEP-10: fetch a challenge (proxied to the approval server), sign it in the wallet, and
+  // exchange it for a session token bound to this account.
+  private async authenticate(address: string): Promise<string> {
+    const challengeRes = await fetch(`/api/auth/challenge?account=${encodeURIComponent(address)}`);
+    if (!challengeRes.ok) throw new ActivationError('failed', 'could not start authentication');
+    const challenge = (await challengeRes.json()) as {
+      transaction: string;
+      network_passphrase: string;
+    };
+
+    const freighter = await import('@stellar/freighter-api');
+    const signed = await freighter.signTransaction(challenge.transaction, {
+      networkPassphrase: challenge.network_passphrase,
+      address,
+    });
+    if (signed.error) throw new ActivationError('failed', signed.error.message);
+
+    const tokenRes = await fetch('/api/auth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ transaction: signed.signedTxXdr }),
+    });
+    if (!tokenRes.ok) throw new ActivationError('failed', 'authentication failed');
+    return ((await tokenRes.json()) as { token: string }).token;
   }
 }

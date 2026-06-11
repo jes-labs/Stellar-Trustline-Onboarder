@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { authEnabled, bearer, verifySession } from '../../../../lib/auth';
 import { buildActivationTx, ChainError } from '../../../../lib/chain';
 import { isLiveConfigured } from '../../../../lib/server-config';
 import type { ActivationConfig } from '../../../../lib/types';
@@ -30,6 +31,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // SEP-10 session required (when auth is configured). The token is also forwarded to the
+  // issuer's approval server below.
+  const token = bearer(request.headers.get('authorization'));
+  if (authEnabled() && !(await verifySession(token))) {
+    return NextResponse.json({ code: 'failed', message: 'unauthorized' }, { status: 401 });
+  }
+
   // QA previews of the approval-time edge states.
   const simulate = body.config.simulate;
   if (simulate === 'kyc') return NextResponse.json({ code: 'kyc' }, { status: 422 });
@@ -44,7 +52,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   try {
-    const { xdr, networkPassphrase } = await buildActivationTx(body.config, body.address);
+    const { xdr, networkPassphrase } = await buildActivationTx(body.config, body.address, token);
     return NextResponse.json({ xdr, networkPassphrase, simulated: false });
   } catch (err) {
     if (err instanceof ChainError) return NextResponse.json({ code: err.code }, { status: 422 });

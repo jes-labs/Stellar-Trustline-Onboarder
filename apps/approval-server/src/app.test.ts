@@ -1,4 +1,4 @@
-import { Account, Keypair, Networks } from '@stellar/stellar-sdk';
+import { Account, Keypair, Networks, Transaction } from '@stellar/stellar-sdk';
 import {
   type ApprovalResult,
   buildClaimRegulated,
@@ -27,6 +27,9 @@ function makeConfig(over: Partial<ServerConfig> = {}): ServerConfig {
     horizonUrl: 'https://horizon-testnet.stellar.org',
     assetCode: 'EURC',
     adminToken: 'test-token',
+    homeDomain: 'localhost',
+    webAuthDomain: 'localhost',
+    jwtSecret: 'test-jwt-secret',
     port: 0,
     host: '127.0.0.1',
     ...over,
@@ -44,6 +47,11 @@ let server: BuiltServer;
 beforeEach(() => {
   server = buildServer(makeConfig());
 });
+
+// A SEP-10 session token for an account (minted directly; the full challenge flow is covered
+// in web-auth.test.ts and in the SEP-10 describe below).
+const tokenFor = (acct: string) => server.webAuth.issueToken(acct);
+const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
 describe('GET /info', () => {
   it('advertises the issuer and supported mechanisms', async () => {
@@ -82,41 +90,67 @@ describe('GET /.well-known/stellar.toml', () => {
 });
 
 describe('POST /tx-approve', () => {
-  it('signs a regulated claim and returns status="revised"', async () => {
+  it('rejects an unauthenticated request', async () => {
     const res = await server.app.inject({
       method: 'POST',
       url: '/tx-approve',
+      payload: { tx: regulatedClaimXdr() },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('signs a regulated claim for a KYC-approved holder (status="revised")', async () => {
+    await server.store.setCustomerStatus(recipient, 'approved');
+    const res = await server.app.inject({
+      method: 'POST',
+      url: '/tx-approve',
+      headers: bearer(await tokenFor(recipient)),
       payload: { tx: regulatedClaimXdr() },
     });
     const body = res.json<ApprovalResult>();
     expect(body.status).toBe('revised');
     expect(body.tx).toBeTruthy();
-    expect(server.compliance.audit()).toHaveLength(1);
+    expect(await server.store.auditLog()).toHaveLength(1);
+    expect(await server.store.listAuthorizations()).toHaveLength(1);
   });
 
   it('is idempotent: re-submitting the same tx does not sign or audit twice', async () => {
+    await server.store.setCustomerStatus(recipient, 'approved');
+    const headers = bearer(await tokenFor(recipient));
     const tx = regulatedClaimXdr();
     const first = (
-      await server.app.inject({ method: 'POST', url: '/tx-approve', payload: { tx } })
+      await server.app.inject({ method: 'POST', url: '/tx-approve', headers, payload: { tx } })
     ).json<ApprovalResult>();
     const second = (
-      await server.app.inject({ method: 'POST', url: '/tx-approve', payload: { tx } })
+      await server.app.inject({ method: 'POST', url: '/tx-approve', headers, payload: { tx } })
     ).json<ApprovalResult>();
     expect(second).toEqual(first);
-    expect(server.compliance.audit()).toHaveLength(1);
+    expect(await server.store.auditLog()).toHaveLength(1);
     expect(server.approvals.size).toBe(1);
   });
 
-  it('returns action_required when the trustor is not KYC-approved', async () => {
-    server.compliance.deny(recipient);
+  it('returns action_required when the holder has no KYC approval (fail-closed)', async () => {
     const res = await server.app.inject({
       method: 'POST',
       url: '/tx-approve',
+      headers: bearer(await tokenFor(recipient)),
+      payload: { tx: regulatedClaimXdr() },
+    });
+    expect(res.json<ApprovalResult>().status).toBe('action_required');
+    expect(await server.store.auditLog()).toHaveLength(0);
+  });
+
+  it('rejects when the holder KYC is denied', async () => {
+    await server.store.setCustomerStatus(recipient, 'denied');
+    const res = await server.app.inject({
+      method: 'POST',
+      url: '/tx-approve',
+      headers: bearer(await tokenFor(recipient)),
       payload: { tx: regulatedClaimXdr() },
     });
     const body = res.json<ApprovalResult>();
-    expect(body.status).toBe('action_required');
-    expect(server.compliance.audit()).toHaveLength(0);
+    expect(body.status).toBe('rejected');
+    expect(body.error).toBe('kyc_denied');
   });
 
   it('approves an unregulated claim as-is (status="success")', async () => {
@@ -126,22 +160,69 @@ describe('POST /tx-approve', () => {
       NETWORK,
     ).xdr;
     const body = (
-      await server.app.inject({ method: 'POST', url: '/tx-approve', payload: { tx } })
+      await server.app.inject({
+        method: 'POST',
+        url: '/tx-approve',
+        headers: bearer(await tokenFor(recipient)),
+        payload: { tx },
+      })
     ).json<ApprovalResult>();
     expect(body.status).toBe('success');
   });
 
   it('rejects invalid XDR', async () => {
     const body = (
-      await server.app.inject({ method: 'POST', url: '/tx-approve', payload: { tx: 'not-xdr' } })
+      await server.app.inject({
+        method: 'POST',
+        url: '/tx-approve',
+        headers: bearer(await tokenFor(recipient)),
+        payload: { tx: 'not-xdr' },
+      })
     ).json<ApprovalResult>();
     expect(body.status).toBe('rejected');
     expect(body.error).toBe('invalid_xdr');
   });
 
   it('400s when tx is missing', async () => {
-    const res = await server.app.inject({ method: 'POST', url: '/tx-approve', payload: {} });
+    const res = await server.app.inject({
+      method: 'POST',
+      url: '/tx-approve',
+      headers: bearer(await tokenFor(recipient)),
+      payload: {},
+    });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('SEP-10 auth', () => {
+  it('400s a challenge request without an account', async () => {
+    const res = await server.app.inject({ method: 'GET', url: '/auth' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('issues a token through challenge then verify, accepted on /tx-approve', async () => {
+    const challenge = (
+      await server.app.inject({ method: 'GET', url: `/auth?account=${recipient}` })
+    ).json<{ transaction: string }>();
+    const signed = new Transaction(challenge.transaction, NETWORK);
+    signed.sign(recipientKp);
+    const verified = (
+      await server.app.inject({
+        method: 'POST',
+        url: '/auth',
+        payload: { transaction: signed.toXDR() },
+      })
+    ).json<{ token: string }>();
+    expect(verified.token).toBeTruthy();
+
+    await server.store.setCustomerStatus(recipient, 'approved');
+    const approve = await server.app.inject({
+      method: 'POST',
+      url: '/tx-approve',
+      headers: bearer(verified.token),
+      payload: { tx: regulatedClaimXdr() },
+    });
+    expect(approve.json<ApprovalResult>().status).toBe('revised');
   });
 });
 
@@ -160,9 +241,20 @@ describe('admin authentication', () => {
     const res = await disabled.app.inject({
       method: 'POST',
       url: '/admin/clawback',
-      headers: { authorization: 'Bearer test-token' },
+      headers: bearer('test-token'),
       payload: { from: recipient, amount: '1' },
     });
     expect(res.statusCode).toBe(503);
+  });
+
+  it('sets KYC status through /admin/kyc with a valid token', async () => {
+    const res = await server.app.inject({
+      method: 'POST',
+      url: '/admin/kyc',
+      headers: bearer('test-token'),
+      payload: { account: recipient, status: 'approved' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await server.store.getCustomerStatus(recipient)).toBe('approved');
   });
 });
