@@ -4,6 +4,7 @@ import {
   buildClaimRegulated,
   buildClaimUnregulated,
 } from '@trustline-onboarder/core';
+import { parseStellarToml } from '@trustline-onboarder/discovery';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { type BuiltServer, buildServer } from './app';
 import type { ServerConfig } from './config';
@@ -51,6 +52,24 @@ describe('GET /info', () => {
     const body = res.json();
     expect(body.issuer).toBe(issuer);
     expect(body.mechanisms).toEqual(['claimable', 'authorize']);
+  });
+});
+
+describe('GET /.well-known/stellar.toml', () => {
+  it('serves a parseable toml advertising the regulated asset and onboarding service', async () => {
+    const res = await server.app.inject({ method: 'GET', url: '/.well-known/stellar.toml' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+
+    const parsed = parseStellarToml(res.body);
+    expect(parsed.onboarding?.server).toBe('/tx-approve');
+    expect(parsed.onboarding?.mechanisms).toEqual(['claimable', 'authorize']);
+    expect(parsed.currencies[0]).toMatchObject({
+      code: 'EURC',
+      issuer,
+      regulated: true,
+      approvalServer: '/tx-approve',
+    });
   });
 });
 

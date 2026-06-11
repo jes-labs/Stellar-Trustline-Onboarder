@@ -1,7 +1,15 @@
 # Example: Wallet integration
 
-Placeholder for the Phase 3 deliverable — a sample self-custody wallet that adopts
-`@trustline-onboarder/sdk` to detect a missing/unauthorized trustline and start onboarding
-(redirect to the activation UI or build the transaction directly).
+How a self-custody wallet adopts `@trustline-onboarder/sdk`. Because the wallet holds the user's
+key, it onboards directly instead of redirecting.
 
-Not implemented yet.
+`src/index.ts` shows the flow (`activateForClaim`): `detect` whether the user already holds the
+asset; if not, `startOnboarding` in `direct` mode builds the sponsored claim, the wallet signs
+the user's part, and submits. The sponsor adds its signature out of band (for example through the
+issuer's approval server) before submission.
+
+The code is illustrative and typechecked against the SDK; it is not run. Type-check it with:
+
+```bash
+pnpm --filter @trustline-onboarder/example-wallet typecheck
+```

@@ -1,11 +1,15 @@
 /**
- * @trustline-onboarder/discovery — stellar.toml + well-known descriptor (stub).
+ * @trustline-onboarder/discovery
  *
- * Full implementation lands in Phase 3. The intended surface:
- *   - toml.ts:      generate/parse the [[CURRENCIES]] + onboarding fields in stellar.toml,
- *                   including the approval server URL and supported mechanisms.
- *   - wellknown.ts: the onboarding service descriptor advertising endpoint + capabilities,
- *                   mirroring how SEP-24 advertises a transfer server.
+ * Generation and parsing of the onboarding fields in a SEP-1 stellar.toml, plus the resolver a
+ * wallet or exchange uses to discover an issuer's onboarding service from its home domain.
  */
 
-export const DISCOVERY_VERSION = '0.0.0';
+export { buildStellarToml, parseStellarToml } from './toml';
+export type { OnboardingCurrency, OnboardingService, StellarToml } from './types';
+export {
+  type ResolveOptions,
+  resolveOnboarding,
+  STELLAR_TOML_PATH,
+  wellKnownUrl,
+} from './wellknown';
