@@ -30,8 +30,8 @@ export interface ActivateInput {
 
 /**
  * The seam between the UI and the chain. The page drives the flow against this interface and
- * never builds or submits a transaction itself. A real implementation keeps the three steps
- * exactly where they belong: connect and sign in the browser, build and submit on the server.
+ * never builds or submits a transaction itself. Connecting and signing happen in the browser;
+ * building, approval, and submission go through the Next API routes.
  */
 export interface ActivationBackend {
   /** Open the wallet modal and return the user's address and the chosen wallet's name. */
@@ -39,6 +39,10 @@ export interface ActivationBackend {
   /** Build, request approval for, sign, and submit the activation transaction. */
   activate(input: ActivateInput): Promise<ActivationResult>;
 }
+
+// In a live deployment the server is configured for the chain and this enables the real wallet.
+// Left unset, the whole flow simulates so the app runs locally with no wallet or secrets.
+const LIVE = process.env.NEXT_PUBLIC_ACTIVATION_MODE === 'live';
 
 const KNOWN_CODES: ReadonlySet<string> = new Set([
   'failed',
@@ -73,6 +77,12 @@ async function toActivationError(res: Response): Promise<ActivationError> {
     // keep the generic code
   }
   return new ActivationError(code as ActivationErrorCode);
+}
+
+interface BuildResponse {
+  xdr: string;
+  networkPassphrase: string;
+  simulated?: boolean;
 }
 
 /**
@@ -110,7 +120,7 @@ export class HttpBackend implements ActivationBackend {
       signal,
     });
     if (!buildRes.ok) throw await toActivationError(buildRes);
-    const { xdr } = (await buildRes.json()) as { xdr: string };
+    const build = (await buildRes.json()) as BuildResponse;
 
     // The connected wallet adds the user's signature. This is the approval the user sees.
     const { signTransactionXdr } = await import('./walletKit');
@@ -118,7 +128,7 @@ export class HttpBackend implements ActivationBackend {
     if (signal.aborted) throw new DOMException('aborted', 'AbortError');
     onSubmitting();
 
-    // Server submits to Horizon. Network outcomes (failure, expired claim) come back here.
+    onSubmitting();
     const submitRes = await fetch('/api/activation/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

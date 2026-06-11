@@ -1,7 +1,7 @@
 {
   "name": "@trustline-onboarder/discovery",
   "version": "0.0.0",
-  "description": "stellar.toml generation/parsing and the onboarding service descriptor (stub)",
+  "description": "stellar.toml generation/parsing and the onboarding service descriptor",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@trustline-onboarder/core": "workspace:*"
+    "@trustline-onboarder/core": "workspace:*",
+    "smol-toml": "1.4.2"
   },
   "devDependencies": {
     "@types/node": "22.18.10",

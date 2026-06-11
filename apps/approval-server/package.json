@@ -20,6 +20,7 @@
   "dependencies": {
     "@stellar/stellar-sdk": "15.1.0",
     "@trustline-onboarder/core": "workspace:*",
+    "@trustline-onboarder/discovery": "workspace:*",
     "@trustline-onboarder/signer": "workspace:*",
     "fastify": "5.8.5"
   },

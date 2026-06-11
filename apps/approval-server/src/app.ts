@@ -7,6 +7,7 @@ import {
   submit,
   toTransaction,
 } from '@trustline-onboarder/core';
+import { buildStellarToml, type OnboardingService } from '@trustline-onboarder/discovery';
 import { LocalSigner } from '@trustline-onboarder/signer';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { Compliance } from './compliance';
@@ -34,7 +35,11 @@ export function buildServer(config: ServerConfig): BuiltServer {
   const compliance = new Compliance();
   const approvals = new ApprovalCache();
   const issuer = signer.publicKey();
-  const app = Fastify({ logger: false });
+  // A transaction envelope is small; cap the body so the signing endpoint cannot be flooded with
+  // oversized payloads.
+  const app = Fastify({ logger: false, bodyLimit: 64 * 1024 });
+
+  app.get('/health', async () => ({ status: 'ok' }));
 
   /**
    * Guard the admin endpoints, which sign issuer operations. Returns true if the request is
@@ -54,31 +59,37 @@ export function buildServer(config: ServerConfig): BuiltServer {
   }
 
   // --- Discovery -----------------------------------------------------------
+  // The onboarding service this issuer advertises, shared by /info and the stellar.toml so the
+  // two never drift.
+  const onboarding: OnboardingService = {
+    server: '/tx-approve',
+    mechanisms: ['claimable', 'authorize'],
+    profiles: ['regulated', 'unregulated'],
+  };
+
   app.get('/info', async () => ({
     issuer,
     network: config.network,
     assetCode: config.assetCode,
-    mechanisms: ['claimable', 'authorize'],
-    profiles: ['regulated', 'unregulated'],
+    mechanisms: onboarding.mechanisms,
+    profiles: onboarding.profiles,
     endpoints: { approve: '/tx-approve', audit: '/audit' },
   }));
 
   app.get('/.well-known/stellar.toml', async (_req, reply) => {
-    const toml = [
-      `NETWORK_PASSPHRASE="${config.network}"`,
-      '',
-      '[[CURRENCIES]]',
-      `code="${config.assetCode}"`,
-      `issuer="${issuer}"`,
-      'regulated=true',
-      `approval_server="/tx-approve"`,
-      'approval_criteria="An authorized trustline is required before holding this asset."',
-      '',
-      '# Trustline Onboarder service descriptor',
-      'ONBOARDING_SERVER="/tx-approve"',
-      'ONBOARDING_MECHANISMS=["claimable","authorize"]',
-      '',
-    ].join('\n');
+    const toml = buildStellarToml({
+      networkPassphrase: config.network,
+      onboarding,
+      currencies: [
+        {
+          code: config.assetCode,
+          issuer,
+          regulated: true,
+          approvalServer: '/tx-approve',
+          approvalCriteria: 'An authorized trustline is required before holding this asset.',
+        },
+      ],
+    });
     reply.header('content-type', 'text/plain; charset=utf-8').send(toml);
   });
 

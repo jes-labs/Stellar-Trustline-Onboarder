@@ -3,7 +3,7 @@ import type { Signer } from './signer';
 
 /**
  * A local-keypair signer for development only: it holds the issuer secret in process memory.
- * Production deployments must use a KMS/HSM adapter instead (see {@link KmsSigner}).
+ * Production deployments must use an HSM or signing service instead (see {@link ExternalSigner}).
  */
 export class LocalSigner implements Signer {
   private readonly keypair: Keypair;

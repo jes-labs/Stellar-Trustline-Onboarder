@@ -69,6 +69,9 @@ importers:
       '@trustline-onboarder/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@trustline-onboarder/discovery':
+        specifier: workspace:*
+        version: link:../../packages/discovery
       '@trustline-onboarder/signer':
         specifier: workspace:*
         version: link:../../packages/signer
@@ -188,6 +191,9 @@ importers:
       '@trustline-onboarder/core':
         specifier: workspace:*
         version: link:../core
+      smol-toml:
+        specifier: 1.4.2
+        version: 1.4.2
     devDependencies:
       '@types/node':
         specifier: 22.18.10
