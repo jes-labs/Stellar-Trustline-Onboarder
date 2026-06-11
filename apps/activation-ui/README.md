@@ -53,9 +53,15 @@ app/
 ```
 
 The `ActivationBackend` interface is the seam to the chain. The page never builds or submits a
-transaction itself; it drives the backend. Today the default `HttpBackend` connects to a demo
-address and the API routes simulate the chain. Wiring real Freighter signing and
-`@trustline-onboarder/core` building is a drop-in behind that interface, with no screen changes.
+transaction itself; it drives the backend. The default `HttpBackend` connects and signs through
+Freighter in the browser, while the API routes build the transaction with
+`@trustline-onboarder/core`, route it through the issuer's SEP-8 approval server when the asset
+is regulated, sponsor-sign it, and submit it to Horizon (`lib/chain.ts`).
+
+Both sides degrade gracefully. The client falls back to a demo address and a simulated approval
+unless `NEXT_PUBLIC_ACTIVATION_MODE=live`, and the routes simulate the chain unless the server
+environment is configured (below). With neither set, the whole flow runs locally end to end with
+no wallet and no secrets, which is the default development experience.
 
 ## Configuration
 
@@ -83,10 +89,25 @@ Example:
 ## Theming
 
 Every brandable value is a design token in `app/globals.css` (`@theme`), mapped onto Tailwind
-utilities. A broker re-themes by overriding the primary color — pass `primary` on the URL and
-the page sets `--color-indigo` on the root, so every indigo utility follows. Type is set in
-three families via `next/font`: Space Grotesk (headings), Inter (body), JetBrains Mono
-(addresses, asset codes, balances).
+utilities. A broker re-themes by overriding the primary color: pass `primary` on the URL and the
+page sets `--color-indigo` on the root, so every indigo utility follows. Type is set in three
+families via `next/font`: Space Grotesk (headings), Inter (body), JetBrains Mono (addresses,
+asset codes, balances).
+
+## Environment
+
+The chain runs live only when the server is configured. Set these to go live:
+
+| Variable | Meaning |
+| -------- | ------- |
+| `NEXT_PUBLIC_ACTIVATION_MODE` | Set to `live` to connect and sign through Freighter in the browser. |
+| `NETWORK_PASSPHRASE` | The Stellar network to build and submit against. |
+| `HORIZON_URL` | Horizon endpoint for loading accounts and submitting. |
+| `SPONSOR_SECRET` | Secret seed of the account that sponsors trustline reserves. |
+| `APPROVAL_SERVER_URL` | Issuer SEP-8 approval server. Its presence marks the asset as regulated. |
+| `EXPLORER_TX_BASE` | Base URL for transaction links on the success screen. |
+
+Leave them unset for local development and the page simulates the chain end to end.
 
 ## Develop
 

@@ -15,6 +15,9 @@ export type Screen =
 /** The wallet options offered on the connect step. */
 export type WalletId = 'freighter' | 'mobile' | 'other';
 
+/** The edge outcomes a backend can surface, named to match their screens. */
+export type ActivationErrorCode = 'failed' | 'kyc' | 'rejected' | 'expired' | 'no-wallet';
+
 /**
  * Per-session configuration. An exchange or broker sets these on the redirect URL; the page
  * reads them server-side and passes them down. Everything except the asset code has a sensible

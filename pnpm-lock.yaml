@@ -20,6 +20,15 @@ importers:
 
   apps/activation-ui:
     dependencies:
+      '@stellar/freighter-api':
+        specifier: 4.1.0
+        version: 4.1.0
+      '@stellar/stellar-sdk':
+        specifier: 15.1.0
+        version: 15.1.0
+      '@trustline-onboarder/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       next:
         specifier: 15.5.4
         version: 15.5.4(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -1032,6 +1041,9 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@stellar/freighter-api@4.1.0':
+    resolution: {integrity: sha512-5iaENUG8AoSlBr771XVou4wjYxfcl+SRyFZydwwGEuHm1XGDu/HLXFifXbRFoU14/5rZYouycnv1uJCuFIeBxg==}
 
   '@stellar/js-xdr@4.0.0':
     resolution: {integrity: sha512-+NmNa7Tk5BI5XFdy/6xGTqAN4J9a9KgCrCGhj2uEUTCBhLkch0M+QbKzNH8zEnejWe0p8w+0q5hUVX6L3OzoVA==}
@@ -2705,6 +2717,11 @@ snapshots:
     optional: true
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@stellar/freighter-api@4.1.0':
+    dependencies:
+      buffer: 6.0.3
+      semver: 7.8.4
 
   '@stellar/js-xdr@4.0.0': {}
 
