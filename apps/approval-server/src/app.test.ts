@@ -55,6 +55,14 @@ describe('GET /info', () => {
   });
 });
 
+describe('GET /health', () => {
+  it('reports ok', async () => {
+    const res = await server.app.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'ok' });
+  });
+});
+
 describe('GET /.well-known/stellar.toml', () => {
   it('serves a parseable toml advertising the regulated asset and onboarding service', async () => {
     const res = await server.app.inject({ method: 'GET', url: '/.well-known/stellar.toml' });

@@ -102,4 +102,31 @@ describe('validateOnboardingTx', () => {
     const result = validateOnboardingTx(tx, issuer);
     expect(result.ok).toBe(false);
   });
+
+  it('rejects a transaction with no expiry (maxTime)', () => {
+    const tx = new TransactionBuilder(account(recipient), {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK,
+    })
+      .addOperation(Operation.changeTrust({ source: recipient, asset }))
+      .setTimeout(0) // TimeoutInfinite: maxTime = 0
+      .build();
+    const result = validateOnboardingTx(tx, issuer);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toMatch(/maxTime|expiry/);
+  });
+
+  it('rejects a transaction with too many operations', () => {
+    const builder = new TransactionBuilder(account(recipient), {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK,
+    });
+    for (let i = 0; i < 51; i++) {
+      builder.addOperation(Operation.changeTrust({ source: recipient, asset }));
+    }
+    const tx = builder.setTimeout(180).build();
+    const result = validateOnboardingTx(tx, issuer);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toMatch(/too many operations/);
+  });
 });

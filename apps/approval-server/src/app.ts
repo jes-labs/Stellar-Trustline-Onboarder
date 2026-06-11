@@ -35,7 +35,11 @@ export function buildServer(config: ServerConfig): BuiltServer {
   const compliance = new Compliance();
   const approvals = new ApprovalCache();
   const issuer = signer.publicKey();
-  const app = Fastify({ logger: false });
+  // A transaction envelope is small; cap the body so the signing endpoint cannot be flooded with
+  // oversized payloads.
+  const app = Fastify({ logger: false, bodyLimit: 64 * 1024 });
+
+  app.get('/health', async () => ({ status: 'ok' }));
 
   /**
    * Guard the admin endpoints, which sign issuer operations. Returns true if the request is
