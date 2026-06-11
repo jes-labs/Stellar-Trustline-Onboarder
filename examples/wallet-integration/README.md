@@ -1,15 +1,27 @@
 # Example: Wallet integration
 
-How a self-custody wallet adopts `@trustline-onboarder/sdk`. Because the wallet holds the user's
-key, it onboards directly instead of redirecting.
+A runnable, self-custody wallet that adopts [`@trustline-onboarder/sdk`](../../packages/sdk) to
+onboard a user into a Stellar asset — no XLM for the reserve, no manual "create a trustline"
+prompt.
 
-`src/index.ts` shows the flow (`activateForClaim`): `detect` whether the user already holds the
-asset; if not, `startOnboarding` in `direct` mode builds the sponsored claim, the wallet signs
-the user's part, and submits. The sponsor adds its signature out of band (for example through the
-issuer's approval server) before submission.
+It demonstrates the **recipient** flow end-to-end on testnet:
 
-The code is illustrative and typechecked against the SDK; it is not run. Type-check it with:
+1. `detect` — does the user already hold the asset? (Gate onboarding on this.)
+2. `activateWithWallet` (from `@trustline-onboarder/sdk/client`) — build a sponsored trustline,
+   sign it with the user's key **in-wallet**, and submit. The wallet supplies only its own
+   signing function; the SDK never sees the key.
+3. `verifyActivation` — confirm the trustline before treating the user as onboarded.
+
+It also prints the **redirect alternative**: a wallet that prefers not to build the transaction
+can hand the user to the hosted activation page with `startOnboarding({ prefer: 'redirect' })`.
+
+The example funds fresh testnet keypairs via Friendbot (including its own bring-your-own
+sponsor), so no secrets are needed.
 
 ```bash
-pnpm --filter @trustline-onboarder/example-wallet typecheck
+pnpm --filter @trustline-onboarder/example-wallet start
 ```
+
+The sponsor here is a local keypair for simplicity. In production, back it with a KMS signer via
+[`@trustline-onboarder/sdk/server`](../../packages/sdk/src/server.ts) (`sponsorFromSigner`) so the
+key never lives in process. See the [integration guide](../../docs/integration-guide.md).

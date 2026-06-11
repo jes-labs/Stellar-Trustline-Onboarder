@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@stellar/freighter-api": "4.1.0",
+    "@creit.tech/stellar-wallets-kit": "2.3.0",
     "@stellar/stellar-sdk": "15.1.0",
     "@trustline-onboarder/core": "workspace:*",
     "jose": "5.9.6",

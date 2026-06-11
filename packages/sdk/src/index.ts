@@ -1,23 +1,29 @@
 /**
- * @trustline-onboarder/sdk
+ * @trustline-onboarder/sdk — the adopter-facing SDK for wallets and brokers.
  *
- * The adopter-facing surface for wallets and exchanges: detect whether a destination can receive
- * an asset, start onboarding (by redirect or by building the transaction directly), and verify
- * that activation completed. This is the client side of the standard.
+ * One {@link TrustlineOnboarder} serves both personas: a wallet onboards its user into an asset
+ * (detect → build → sign → submit), a broker hands a withdrawing user to the hosted page or pushes
+ * a claimable balance. The SDK never holds keys and the sponsor is always bring-your-own — see
+ * the `/server` and `/client` subpaths for per-persona conveniences.
  */
 
-export {
-  type ActivationParams,
-  buildActivationUrl,
-  parseActivationParams,
-} from './deeplink';
-export { detect, readTrustline, type TrustlineState } from './detect';
-export {
-  buildOnboardingTx,
-  type OnboardingRequest,
-  planOnboarding,
-  type StartOnboardingInput,
-  type StartOnboardingResult,
-  startOnboarding,
-} from './onboard';
-export { type VerifyOptions, verifyActivation } from './verify';
+export { OnboardingError, type OnboardingErrorCode } from './errors';
+export { TrustlineOnboarder } from './onboarder';
+export { buildRedirectUrl } from './redirect';
+export type {
+  AssetRef,
+  DetectResult,
+  Mechanism,
+  NetworkName,
+  OnboardingPlan,
+  OnboardRequest,
+  SendRequest,
+  SettledActivation,
+  SignerLike,
+  SponsorConfig,
+  StartOnboardingParams,
+  StartOnboardingResult,
+  TrustlineOnboarderConfig,
+} from './types';
+
+export const SDK_VERSION = '0.1.0';

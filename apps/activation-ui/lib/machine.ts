@@ -4,39 +4,66 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { type ActivationBackend, ActivationError, type ActivationResult } from './backend';
 import { DEMO_ADDRESS } from './config';
 import type { StatusAction } from './statusScreens';
-import type { ActivationConfig, Screen, WalletId } from './types';
+import type { ActivationConfig, Screen, SelectedAsset } from './types';
 
-interface State {
+export interface State {
   screen: Screen;
-  walletId: WalletId | null;
+  /** Display name of the connected wallet (from the kit's selected module); empty until connected. */
+  walletName: string;
   address: string;
   result: ActivationResult | null;
   connecting: boolean;
+  /** A non-fatal connect error (e.g. the user dismissed the modal), shown inline on connect. */
+  connectError: string | null;
+  /** The asset being activated; null until chosen in the picker. */
+  asset: SelectedAsset | null;
+  /** True when the asset came fixed on the URL (exchange-driven), so the picker is skipped. */
+  assetLocked: boolean;
 }
 
-type Action =
+export type Action =
   | { type: 'getStarted' }
   | { type: 'back' }
   | { type: 'goto'; screen: Screen }
-  | { type: 'selectWallet'; walletId: WalletId }
-  | { type: 'connected'; address: string }
+  | { type: 'chooseAsset'; asset: SelectedAsset }
+  | { type: 'connecting' }
+  | { type: 'connected'; address: string; walletName: string }
+  | { type: 'connectFailed'; message: string }
   | { type: 'edge'; screen: Screen }
   | { type: 'approve' }
   | { type: 'submitting' }
   | { type: 'succeeded'; result: ActivationResult };
 
-function reducer(state: State, action: Action): State {
+export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'getStarted':
-      return { ...state, screen: 'connect' };
+      // Skip the picker when the asset is fixed by the URL; otherwise choose it first.
+      return { ...state, screen: state.asset ? 'connect' : 'selectAsset' };
     case 'back':
-      return { ...state, screen: state.screen === 'review' ? 'connect' : 'welcome' };
+      switch (state.screen) {
+        case 'review':
+          return { ...state, screen: 'connect' };
+        case 'connect':
+          return { ...state, screen: state.assetLocked ? 'welcome' : 'selectAsset' };
+        default:
+          return { ...state, screen: 'welcome' };
+      }
     case 'goto':
       return { ...state, screen: action.screen };
-    case 'selectWallet':
-      return { ...state, walletId: action.walletId, connecting: true };
+    case 'chooseAsset':
+      return { ...state, asset: action.asset, screen: 'connect' };
+    case 'connecting':
+      return { ...state, connecting: true, connectError: null };
     case 'connected':
-      return { ...state, address: action.address, connecting: false, screen: 'review' };
+      return {
+        ...state,
+        address: action.address,
+        walletName: action.walletName,
+        connecting: false,
+        screen: 'review',
+      };
+    case 'connectFailed':
+      return { ...state, connecting: false, connectError: action.message };
     case 'edge':
       return { ...state, connecting: false, screen: action.screen };
     case 'approve':
@@ -53,8 +80,8 @@ function reducer(state: State, action: Action): State {
 export interface ActivationActions {
   getStarted: () => void;
   back: () => void;
-  selectWallet: (id: WalletId) => void;
-  noWallet: () => void;
+  chooseAsset: (asset: SelectedAsset) => void;
+  connect: () => void;
   activate: () => void;
   runStatusAction: (action: StatusAction) => void;
 }
@@ -75,12 +102,21 @@ function navigate(url: string): void {
  * handler identities.
  */
 export function useActivation(config: ActivationConfig, backend: ActivationBackend): UseActivation {
+  // The asset is fixed only when the URL supplies both a code and an issuer; otherwise the user
+  // picks it from Horizon. A code without an issuer is ambiguous, so it does not lock the asset.
+  const lockedAsset: SelectedAsset | null = config.issuer
+    ? { code: config.assetCode, issuer: config.issuer, regulated: false }
+    : null;
+
   const [state, dispatch] = useReducer(reducer, {
     screen: 'welcome',
-    walletId: null,
+    walletName: '',
     address: config.destination ?? DEMO_ADDRESS,
     result: null,
     connecting: false,
+    connectError: null,
+    asset: lockedAsset,
+    assetLocked: lockedAsset !== null,
   });
 
   // A ref mirror of state so the stable callbacks can read the latest values without being
@@ -101,7 +137,7 @@ export function useActivation(config: ActivationConfig, backend: ActivationBacke
     backend
       .activate({
         config,
-        walletId: stateRef.current.walletId ?? 'freighter',
+        asset: stateRef.current.asset,
         address: stateRef.current.address,
         onSubmitting: () => dispatch({ type: 'submitting' }),
         signal: controller.signal,
@@ -117,19 +153,21 @@ export function useActivation(config: ActivationConfig, backend: ActivationBacke
       });
   }, [backend, config]);
 
-  const selectWallet = useCallback(
-    (id: WalletId) => {
-      dispatch({ type: 'selectWallet', walletId: id });
-      backend
-        .connect(id)
-        .then(({ address }) => dispatch({ type: 'connected', address }))
-        .catch((err: unknown) => {
-          const screen = err instanceof ActivationError ? err.code : 'failed';
-          dispatch({ type: 'edge', screen });
-        });
-    },
-    [backend],
-  );
+  const connect = useCallback(() => {
+    dispatch({ type: 'connecting' });
+    backend
+      .connect()
+      .then(({ address, walletName }) => dispatch({ type: 'connected', address, walletName }))
+      .catch((err: unknown) => {
+        // Connection failures (including a dismissed modal) keep the user on the connect screen
+        // with an inline message, rather than throwing them to the generic error screen.
+        const message =
+          err instanceof ActivationError && err.message !== err.code
+            ? err.message
+            : 'Could not connect. Please try again.';
+        dispatch({ type: 'connectFailed', message });
+      });
+  }, [backend]);
 
   const runStatusAction = useCallback(
     (action: StatusAction) => {
@@ -174,12 +212,12 @@ export function useActivation(config: ActivationConfig, backend: ActivationBacke
     () => ({
       getStarted: () => dispatch({ type: 'getStarted' }),
       back: () => dispatch({ type: 'back' }),
-      selectWallet,
-      noWallet: () => dispatch({ type: 'goto', screen: 'no-wallet' }),
+      chooseAsset: (asset: SelectedAsset) => dispatch({ type: 'chooseAsset', asset }),
+      connect,
       activate: runActivate,
       runStatusAction,
     }),
-    [selectWallet, runActivate, runStatusAction],
+    [connect, runActivate, runStatusAction],
   );
 
   return { state, actions };
