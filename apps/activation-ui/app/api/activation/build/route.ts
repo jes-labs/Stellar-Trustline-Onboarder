@@ -9,6 +9,7 @@ import {
   parseTransaction,
 } from '@trustline-onboarder/core';
 import { NextResponse } from 'next/server';
+import { authEnabled, bearer, verifySession } from '../../../../lib/auth';
 import { guard } from '../../../../lib/guard';
 import {
   APPROVAL_SERVER_URL,
@@ -65,6 +66,9 @@ async function loadRecipient(address: string) {
  * Regulated (AUTH_REQUIRED) assets need the issuer's signature. We can only obtain it for an asset
  * whose approval server we run (`APPROVAL_SERVER_URL`); for any other regulated asset we cannot
  * self-authorize, so the user is routed to verification (`kyc`).
+ *
+ * When SEP-10 is configured (WEB_AUTH_JWT_SECRET), the request must carry a valid session token;
+ * that token is forwarded to the approval server, which also requires it.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const blocked = guard(request, 10);
@@ -79,6 +83,13 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const config = body.config;
   if (!config || !body.address) return fail('failed', 'missing config or address', 400);
+
+  // SEP-10 session required (when auth is configured). The same token is forwarded to the
+  // issuer's approval server below.
+  const token = bearer(request.headers.get('authorization'));
+  if (authEnabled() && !(await verifySession(token))) {
+    return fail('failed', 'unauthorized', 401);
+  }
 
   // QA override: preview KYC / compliance edge screens without touching the chain.
   if (config.simulate === 'kyc') return NextResponse.json({ code: 'kyc' }, { status: 422 });
@@ -130,13 +141,13 @@ export async function POST(request: Request): Promise<NextResponse> {
         // Not an asset we can authorize — the user must verify with the issuer/platform.
         return NextResponse.json({ code: 'kyc' }, { status: 422 });
       }
-      xdr = await runApproval(xdr);
+      xdr = await runApproval(xdr, token);
     }
 
     // Sign as the sponsor (who pays the reserve). The wallet adds the user's signature next.
     const tx = parseTransaction(xdr, NETWORK_PASSPHRASE);
     tx.sign(sponsorKeypair());
-    return NextResponse.json({ xdr: tx.toXDR() });
+    return NextResponse.json({ xdr: tx.toXDR(), networkPassphrase: NETWORK_PASSPHRASE });
   } catch (err) {
     if (err instanceof ApprovalRedirect) {
       return NextResponse.json({ code: err.code }, { status: 422 });
@@ -147,13 +158,16 @@ export async function POST(request: Request): Promise<NextResponse> {
 }
 
 /**
- * Hand a regulated transaction to the SEP-8 approval server for the issuer's signature.
- * Throws an {@link ApprovalRedirect} carrying the screen code for non-success statuses.
+ * Hand a regulated transaction to the SEP-8 approval server for the issuer's signature, forwarding
+ * the caller's SEP-10 session token. Throws an {@link ApprovalRedirect} carrying the screen code
+ * for non-success statuses.
  */
-async function runApproval(xdr: string): Promise<string> {
+async function runApproval(xdr: string, token?: string): Promise<string> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (token) headers.authorization = `Bearer ${token}`;
   const res = await fetch(`${APPROVAL_SERVER_URL}/tx-approve`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({ tx: xdr }),
   });
   const result = (await res.json()) as { status?: string; tx?: string };

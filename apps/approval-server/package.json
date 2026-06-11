@@ -22,10 +22,14 @@
     "@trustline-onboarder/core": "workspace:*",
     "@trustline-onboarder/discovery": "workspace:*",
     "@trustline-onboarder/signer": "workspace:*",
-    "fastify": "5.8.5"
+    "fastify": "5.8.5",
+    "jose": "5.9.6",
+    "pg": "8.13.1"
   },
   "devDependencies": {
     "@types/node": "22.18.10",
+    "@types/pg": "8.11.10",
+    "pg-mem": "3.0.5",
     "tsup": "8.5.1",
     "tsx": "4.22.4",
     "typescript": "5.9.3",

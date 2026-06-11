@@ -59,6 +59,19 @@ async function postJson<T>(
 
 const admin = { authorization: `Bearer ${ADMIN_TOKEN}` };
 
+async function getJson<T>(path: string): Promise<T> {
+  return (await (await fetch(`${BASE_URL}${path}`)).json()) as T;
+}
+
+/** Complete SEP-10: fetch a challenge, sign it, exchange it for a session token. */
+async function authenticate(kp: Keypair): Promise<{ authorization: string }> {
+  const { transaction } = await getJson<{ transaction: string }>(`/auth?account=${kp.publicKey()}`);
+  const signed = parseTransaction(transaction, NETWORK);
+  signed.sign(kp);
+  const { token } = await postJson<{ token: string }>('/auth', { transaction: signed.toXDR() });
+  return { authorization: `Bearer ${token}` };
+}
+
 async function main(): Promise<void> {
   console.log('\n=== Trustline Onboarder — Mechanism C (REGULATED) via approval server ===');
 
@@ -98,6 +111,9 @@ async function main(): Promise<void> {
     horizonUrl: HORIZON_URL,
     assetCode: 'DEMO',
     adminToken: ADMIN_TOKEN,
+    homeDomain: 'localhost',
+    webAuthDomain: 'localhost',
+    jwtSecret: 'demo-jwt-secret',
     port: PORT,
     host: '127.0.0.1',
   };
@@ -108,6 +124,11 @@ async function main(): Promise<void> {
     mechanisms: string[];
   };
   logOk(`approval server up — issuer ${info.issuer}, mechanisms ${info.mechanisms.join(', ')}`);
+
+  logStep('Approving the recipient KYC (admin) and authenticating the recipient (SEP-10)');
+  await postJson('/admin/kyc', { account: recipient.publicKey(), status: 'approved' }, admin);
+  const session = await authenticate(recipient);
+  logOk('recipient KYC approved and session authenticated');
 
   try {
     logStep(`Distributor creates a claimable balance of ${AMOUNT} DEMO to the recipient`);
@@ -141,7 +162,7 @@ async function main(): Promise<void> {
     logInfo(`operation sequence: ${claimBuilt.operations.map((o) => o.type).join(' → ')}`);
     logInfo(`issuer-auth op index: ${claimBuilt.issuerAuthOpIndex}`);
 
-    const approval = await postJson<ApprovalResult>('/tx-approve', { tx: claimBuilt.xdr });
+    const approval = await postJson<ApprovalResult>('/tx-approve', { tx: claimBuilt.xdr }, session);
     if (approval.status !== 'revised' || !approval.tx) {
       throw new Error(`unexpected approval status: ${approval.status} ${approval.message ?? ''}`);
     }

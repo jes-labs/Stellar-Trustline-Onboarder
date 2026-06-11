@@ -96,8 +96,9 @@ interface BuildResponse {
  *   sign  (browser) → the connected wallet adds the user's signature
  *   submit (server) → submits to Horizon and returns the real hash
  *
- * When `config.simulate` is set the chain is bypassed entirely so QA can preview the edge screens
- * by URL with no wallet — see {@link simulate}.
+ * In live mode the account first authenticates via SEP-10 and the session token is sent on the
+ * build request. When `config.simulate` is set the chain is bypassed entirely so QA can preview
+ * the edge screens by URL with no wallet — see {@link simulate}.
  */
 export class HttpBackend implements ActivationBackend {
   async connect(): Promise<{ address: string; walletName: string }> {
@@ -110,12 +111,16 @@ export class HttpBackend implements ActivationBackend {
 
     const { config, asset, address, onSubmitting, signal } = input;
 
+    // In live mode, authenticate the account via SEP-10 and bind the build request to it.
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (LIVE) headers.authorization = `Bearer ${await this.authenticate(address)}`;
+
     // Server builds the transaction and runs the issuer approval (SEP-8) for regulated assets,
     // then signs as the sponsor. KYC and compliance outcomes come back here. It returns the XDR
     // the wallet still needs to add the user's signature to.
     const buildRes = await fetch('/api/activation/build', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({ config, asset, address }),
       signal,
     });
@@ -124,11 +129,10 @@ export class HttpBackend implements ActivationBackend {
 
     // The connected wallet adds the user's signature. This is the approval the user sees.
     const { signTransactionXdr } = await import('./walletKit');
-    const signedXdr = await signTransactionXdr(xdr, address);
+    const signedXdr = await signTransactionXdr(build.xdr, address);
     if (signal.aborted) throw new DOMException('aborted', 'AbortError');
     onSubmitting();
 
-    onSubmitting();
     const submitRes = await fetch('/api/activation/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -163,5 +167,24 @@ export class HttpBackend implements ActivationBackend {
     });
     if (!submitRes.ok) throw await toActivationError(submitRes);
     return (await submitRes.json()) as ActivationResult;
+  }
+
+  // SEP-10: fetch a challenge (proxied to the approval server), sign it with the connected wallet,
+  // and exchange it for a session token bound to this account.
+  private async authenticate(address: string): Promise<string> {
+    const challengeRes = await fetch(`/api/auth/challenge?account=${encodeURIComponent(address)}`);
+    if (!challengeRes.ok) throw new ActivationError('failed', 'could not start authentication');
+    const challenge = (await challengeRes.json()) as { transaction: string };
+
+    const { signTransactionXdr } = await import('./walletKit');
+    const signedChallenge = await signTransactionXdr(challenge.transaction, address);
+
+    const tokenRes = await fetch('/api/auth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ transaction: signedChallenge }),
+    });
+    if (!tokenRes.ok) throw new ActivationError('failed', 'authentication failed');
+    return ((await tokenRes.json()) as { token: string }).token;
   }
 }

@@ -1,48 +1,44 @@
 /**
  * Example: a self-custody wallet that onboards a user directly.
  *
- * The wallet holds the user's key, so instead of redirecting it builds the onboarding
- * transaction with the SDK, signs the user's part, and submits. The sponsor co-signs out of band
- * (for instance via the issuer's approval server). The code is illustrative and typechecked
- * against the SDK; it is not run.
+ * The wallet holds the user's key and runs a bring-your-own sponsor, so it uses the direct path:
+ * build the onboarding transaction, have the user sign it, and submit (the SDK adds the sponsor
+ * signature on submit). The code is illustrative and typechecked against the SDK; it is not run.
  */
-import type { Keypair } from '@stellar/stellar-sdk';
-import { type AssetRef, submit, TESTNET, toTransaction } from '@trustline-onboarder/core';
-import { detect, type OnboardingRequest, startOnboarding } from '@trustline-onboarder/sdk';
+import { type Keypair, Transaction } from '@stellar/stellar-sdk';
+import { type AssetRef, TrustlineOnboarder } from '@trustline-onboarder/sdk';
+
+// The sponsor pays trustline reserves so the user needs no XLM. Bring-your-own; never hosted.
+const onboarder = new TrustlineOnboarder({
+  network: 'testnet',
+  sponsor: { kind: 'keypair', secret: process.env.SPONSOR_SECRET ?? '' },
+});
 
 export interface ClaimInvite {
   asset: AssetRef;
-  /** Account paying the trustline reserve. */
-  sponsor: string;
   /** The claimable balance waiting for the user. */
   balanceId: string;
 }
 
 /**
- * Activate the user's account for an incoming claimable balance: build the sponsored claim,
- * sign the user's part, and submit. Returns the already-active state untouched.
+ * Activate the user's account for an incoming claimable balance: build the sponsored claim, sign
+ * the user's part, and submit. Returns the already-active state untouched.
  */
 export async function activateForClaim(user: Keypair, invite: ClaimInvite): Promise<string> {
-  const existing = await detect(TESTNET.horizonUrl, user.publicKey(), invite.asset);
+  const existing = await onboarder.detect({ account: user.publicKey(), asset: invite.asset });
   if (existing.hasTrustline && existing.authorized) {
     return 'already-active';
   }
 
-  const request: OnboardingRequest = {
-    network: TESTNET,
-    mechanism: 'claimable',
-    profile: 'unregulated',
+  const plan = await onboarder.buildOnboardingTx({
+    account: user.publicKey(),
     asset: invite.asset,
-    recipient: user.publicKey(),
-    sponsor: invite.sponsor,
     balanceId: invite.balanceId,
-  };
+  });
 
-  const started = await startOnboarding({ mode: 'direct', request });
-  if (started.mode !== 'direct') throw new Error('expected a direct build');
-
-  const tx = toTransaction(started.tx);
-  tx.sign(user); // the sponsor adds its signature out of band before submission
-  const result = await submit(TESTNET.horizonUrl, tx);
-  return result.hash;
+  // The wallet adds the user's signature; submit() adds the sponsor's signature and submits.
+  const tx = new Transaction(plan.tx, plan.network);
+  tx.sign(user);
+  const settled = await onboarder.submit(tx.toXDR());
+  return settled.hash;
 }
