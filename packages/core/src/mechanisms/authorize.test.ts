@@ -65,11 +65,14 @@ describe('MiCA operations', () => {
     const built = buildFreeze({ asset, trustor: user }, account(issuer), NETWORK);
     expect(built.operations).toEqual([{ type: 'setTrustLineFlags', source: issuer }]);
     expect(built.requiredSigners).toEqual([issuer]);
+    // Admin actions are not an onboarding mechanism.
+    expect(built.mechanism).toBeUndefined();
   });
 
   it('clawback is a single issuer-sourced clawback op', () => {
     const built = buildClawback({ asset, from: user, amount: '5' }, account(issuer), NETWORK);
     expect(built.operations).toEqual([{ type: 'clawback', source: issuer }]);
     expect(built.requiredSigners).toEqual([issuer]);
+    expect(built.mechanism).toBeUndefined();
   });
 });

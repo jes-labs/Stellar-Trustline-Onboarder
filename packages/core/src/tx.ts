@@ -42,7 +42,7 @@ export function describe(ops: PlannedOp[]): OperationDescriptor[] {
 export function assemble(params: {
   source: Account;
   network: string;
-  mechanism: Mechanism;
+  mechanism?: Mechanism;
   operations: PlannedOp[];
   requiredSigners: string[];
   issuerAuthOpIndex?: number;

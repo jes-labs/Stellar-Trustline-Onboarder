@@ -2,7 +2,7 @@
  * Phase 1 demo — Mechanism C, REGULATED (AUTH_REQUIRED) asset, end-to-end on Stellar testnet,
  * driven through the issuer-side approval server over HTTP.
  *
- * Flow: the recipient builds a sponsored claim that *includes* an issuer authorization op as a
+ * Flow: the recipient builds a sponsored claim that includes an issuer authorization op as a
  * placeholder, POSTs it to the approval server's `/tx-approve`, gets back the issuer-signed
  * ("revised") transaction, adds the sponsor + recipient signatures, and submits. Then the demo
  * exercises the MiCA admin operations (clawback, freeze) and prints the audit trail.

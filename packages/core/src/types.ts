@@ -41,8 +41,11 @@ export interface BuiltTransaction {
   network: string;
   /** Accounts whose signatures are required before submission, in no particular order. */
   requiredSigners: string[];
-  /** The mechanism this transaction implements. */
-  mechanism: Mechanism;
+  /**
+   * The onboarding mechanism this transaction implements. Omitted for issuer admin
+   * transactions (freeze, clawback), which are not an onboarding flow.
+   */
+  mechanism?: Mechanism;
   /** The ordered operation descriptors (see {@link OperationDescriptor}). */
   operations: OperationDescriptor[];
   /**
