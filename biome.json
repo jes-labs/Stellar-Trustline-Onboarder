@@ -7,7 +7,15 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/.next", "!**/.turbo", "!**/node_modules"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.next",
+      "!**/.turbo",
+      "!**/node_modules",
+      "!design_handoff_trustline_activation",
+      "!apps/activation-ui/app/globals.css"
+    ]
   },
   "formatter": {
     "enabled": true,

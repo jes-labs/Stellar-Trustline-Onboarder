@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Everything brandable lives here. A broker re-themes by overriding any of
+ * these variables on a wrapping element (we do exactly that for --color-indigo when a
+ * `primary` query param is present), and every utility below resolves through the variable.
+ */
+@theme {
+  --color-indigo: #4f46e5;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-card: #ffffff;
+  --color-surface: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+  --color-warning: #d97706;
+
+  --font-heading: var(--font-space-grotesk), sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --radius-card: 22px;
+  --radius-panel: 16px;
+  --radius-btn: 14px;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px -20px rgba(15, 23, 42, 0.25);
+  --shadow-btn: 0 12px 24px -10px var(--color-indigo);
+  --shadow-asset: 0 16px 30px -10px var(--color-indigo);
+}
+
+/* Tinted icon/badge backgrounds. Fixed accents, not part of the brandable palette. */
+@theme {
+  --color-tint-indigo: #eef2ff;
+  --color-tint-success: #dcfce7;
+  --color-tint-error: #fee2e2;
+  --color-tint-warning: #fef3c7;
+  --color-tint-slate: #f1f5f9;
+  --color-tint-teal: #ecfeff;
+}
+
+@keyframes tl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes tl-pulse {
+  0% {
+    transform: scale(0.82);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tl-bar {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Respect users who ask for less motion: drop the looping spinner/pulse/sweep. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
