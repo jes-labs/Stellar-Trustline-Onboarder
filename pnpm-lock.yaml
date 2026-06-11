@@ -66,6 +66,9 @@ importers:
       '@trustline-onboarder/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@trustline-onboarder/discovery':
+        specifier: workspace:*
+        version: link:../../packages/discovery
       '@trustline-onboarder/signer':
         specifier: workspace:*
         version: link:../../packages/signer
@@ -114,6 +117,41 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@22.18.10)(vite@8.0.16(@types/node@22.18.10)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4))
 
+  examples/exchange-integration:
+    dependencies:
+      '@trustline-onboarder/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@trustline-onboarder/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.10
+        version: 22.18.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  examples/wallet-integration:
+    dependencies:
+      '@stellar/stellar-sdk':
+        specifier: 15.1.0
+        version: 15.1.0
+      '@trustline-onboarder/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@trustline-onboarder/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.10
+        version: 22.18.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@stellar/stellar-sdk':
@@ -138,6 +176,9 @@ importers:
       '@trustline-onboarder/core':
         specifier: workspace:*
         version: link:../core
+      smol-toml:
+        specifier: 1.4.2
+        version: 1.4.2
     devDependencies:
       '@types/node':
         specifier: 22.18.10
@@ -1945,6 +1986,10 @@ packages:
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
+  smol-toml@1.4.2:
+    resolution: {integrity: sha512-rInDH6lCNiEyn3+hH8KVGFdbjc099j47+OSgbMrfDYX1CmXLfdKd7qi6IfcWj2wFxvSVkuI46M+wPGYfEOEj6g==}
+    engines: {node: '>= 18'}
+
   sonic-boom@4.2.1:
     resolution: {integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==}
 
@@ -3651,6 +3696,8 @@ snapshots:
     optional: true
 
   siginfo@2.0.0: {}
+
+  smol-toml@1.4.2: {}
 
   sonic-boom@4.2.1:
     dependencies:

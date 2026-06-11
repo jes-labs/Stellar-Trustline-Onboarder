@@ -227,7 +227,11 @@ theming, and architecture.
 - **Phase 2, the activation page.** Complete. The full eleven-screen flow as a responsive,
   token-themeable Next.js app, with the chain work behind Next API routes and the wallet
   integration behind a single interface.
-- **Phase 3, the adopter SDK and discovery.** Next.
+- **Phase 3, the adopter SDK and discovery.** Complete. The SDK (`detect`, `startOnboarding`,
+  `buildOnboardingTx`, `verifyActivation`, and the activation deep-link contract) and the
+  discovery package (stellar.toml generation and parsing, plus the home-domain resolver), with
+  worked wallet and exchange integration examples. The approval server now advertises itself
+  through the discovery package.
 - **Phase 4, hardening and a controlled mainnet pilot**, after which the SEP is distilled from
   the working flows.
 

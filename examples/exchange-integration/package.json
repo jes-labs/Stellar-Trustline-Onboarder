@@ -1,0 +1,19 @@
+{
+  "name": "@trustline-onboarder/example-exchange",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: an exchange adopting the SDK to onboard withdrawals",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trustline-onboarder/core": "workspace:*",
+    "@trustline-onboarder/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.10",
+    "typescript": "5.9.3"
+  }
+}
