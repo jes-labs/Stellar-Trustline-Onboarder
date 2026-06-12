@@ -2,20 +2,18 @@
  * Example: an exchange that onboards a user mid-withdrawal.
  *
  * The exchange does not hold the user's key, so it redirects to the activation page and verifies
- * the result when the user returns. This is the most common integration. The code is
- * illustrative and typechecked against the SDK; it is not run.
+ * the result when the user returns — the most common integration. The code is illustrative and
+ * typechecked against the SDK; the runnable end-to-end version is in `exchange.ts`.
  */
-import { type AssetRef, TESTNET } from '@trustline-onboarder/core';
-import {
-  type ActivationParams,
-  buildActivationUrl,
-  detect,
-  verifyActivation,
-} from '@trustline-onboarder/sdk';
+import { type AssetRef, TrustlineOnboarder } from '@trustline-onboarder/sdk';
 
-const HORIZON = TESTNET.horizonUrl;
-const ACTIVATION_PAGE = 'https://activate.example/withdraw';
 const RETURN_URL = 'https://acme.example/withdrawals/return';
+
+// Redirect mode needs no sponsor: the hosted activation page sponsors within its own gated session.
+const onboarder = new TrustlineOnboarder({
+  network: 'testnet',
+  serviceUrl: 'https://activate.example',
+});
 
 export interface WithdrawalRequest {
   destination: string;
@@ -33,24 +31,25 @@ export type WithdrawalDecision = { action: 'release' } | { action: 'onboard'; ur
  * activation first.
  */
 export async function onWithdrawalRequested(req: WithdrawalRequest): Promise<WithdrawalDecision> {
-  const state = await detect(HORIZON, req.destination, req.asset);
+  const state = await onboarder.detect({ account: req.destination, asset: req.asset });
   if (state.hasTrustline && state.authorized) {
     return { action: 'release' };
   }
 
-  const params: ActivationParams = {
-    asset: req.asset.code,
-    issuer: req.asset.issuer,
-    amount: req.amount,
-    platform: 'Acme Exchange',
+  const result = await onboarder.startOnboarding({
+    asset: req.asset,
     destination: req.destination,
+    amount: req.amount,
     balanceId: req.balanceId,
+    platform: 'Acme Exchange',
     returnUrl: RETURN_URL,
-  };
-  return { action: 'onboard', url: buildActivationUrl(ACTIVATION_PAGE, params) };
+    prefer: 'redirect',
+  });
+  if (result.mode !== 'redirect') throw new Error('expected a redirect');
+  return { action: 'onboard', url: result.url };
 }
 
 /** When the user returns from activation, confirm it worked before releasing the funds. */
-export async function onUserReturned(destination: string, asset: AssetRef): Promise<boolean> {
-  return verifyActivation(HORIZON, destination, asset, { requireAuthorized: true });
+export function onUserReturned(destination: string, asset: AssetRef): Promise<boolean> {
+  return onboarder.verifyActivation({ account: destination, asset });
 }
