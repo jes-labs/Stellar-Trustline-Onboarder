@@ -175,8 +175,10 @@ Everything on the critical path uses operations that are final and live on mainn
 
 - Claimable balances (CAP-23) for mechanism C.
 - Sponsored reserves (CAP-33) so the user needs no XLM.
-- Fine-grained authorization (CAP-18, final since Protocol 13) for the `AUTH_REQUIRED` state.
-- Clawback (CAP-35) for the regulated profile.
+- `SetTrustLineFlags` (CAP-35, Protocol 17) to authorize a trustline for the `AUTH_REQUIRED`
+  (regulated) profile, and clawback for the regulated lifecycle.
+- The `AUTH_REQUIRED` / `AUTH_REVOCABLE` account flags (base protocol); CAP-18 (Protocol 13) is the
+  relevant fine-grained authorization model.
 - SEP-1 for discovery, SEP-8 for the regulated-assets approval interface, and SEP-10 / SEP-12
   as the auth and KYC hooks.
 

@@ -30,9 +30,12 @@ new protocol change and depends on:
 
 - **CAP-0023** — Claimable Balances (Mechanism C).
 - **CAP-0033** — Sponsored Reserves (so the recipient needs no XLM).
-- **CAP-0018** — Fine-Grained Control of Authorization (`SetTrustLineFlags`), final since Protocol
-  13, for the regulated (`AUTH_REQUIRED`) profile.
-- **CAP-0035** — Asset Clawback, for the regulated profile's lifecycle (informative).
+- **CAP-0035** — Asset Clawback (Protocol 17), which introduced the `SetTrustLineFlags` operation.
+  This SEP uses `SetTrustLineFlags` to authorize a trustline in the regulated profile (setting the
+  `AUTHORIZED` flag) and, in the regulated lifecycle, to claw back issued amounts.
+- The `AUTH_REQUIRED` and `AUTH_REVOCABLE` account flags (base protocol) define the regulated
+  profile; **CAP-0018** (Fine-Grained Control of Authorization, Protocol 13) is the relevant
+  authorization model (informative).
 - **SEP-0001** — `stellar.toml`, for discovery.
 - **SEP-0008** — Regulated Assets, whose `/tx-approve` request/response shape this SEP reuses for
   issuer authorization.
@@ -261,8 +264,9 @@ Implementations SHOULD encode `#` as `%23` in `primary`.
 ### 7. Issuer authorization (regulated assets)
 
 For a regulated asset, the issuer authorization operation (§4) MUST be signed by the issuer. The
-onboarding service obtains that signature from the issuer's **approval server**, reusing the
-SEP-8 `/tx-approve` interface.
+onboarding service obtains that signature from the issuer's **approval server**, following the
+SEP-8 `/tx-approve` **status semantics**. This profile specifies a JSON transport; an approval
+server that also implements SEP-8's form-encoded transport SHOULD accept both.
 
 **Request** — `POST {approval_server}` with `Content-Type: application/json`:
 
@@ -284,7 +288,10 @@ The approval server:
 
 - MUST validate that the transaction contains only operations it is willing to authorize, and MUST
   sign **only** the issuer authorization operation(s) (`SetTrustLineFlags` setting `AUTHORIZED`) for
-  its own asset. It MUST NOT sign any operation that moves user funds.
+  its own asset. It MUST NOT sign any operation that moves user funds, and MUST reject a
+  `SetTrustLineFlags` that sets any flag other than `AUTHORIZED`.
+- MUST reject a transaction without a finite `maxTime` (expiry), so the issuer signature cannot be
+  replayed indefinitely.
 - MUST gate authorization on the trustor having passed the issuer's compliance checks; when not
   passed it MUST return `action_required` (or `pending`).
 - MUST be idempotent and replay-protected: the same transaction MUST yield the same response and
@@ -358,7 +365,8 @@ The regulated profile makes a MiCA-compliant lifecycle possible. Beyond onboardi
 the issuer (through privileged, authenticated operations on its own account — NOT part of the
 onboarding flow) MAY:
 
-- **Revoke / freeze** a trustline's authorization (`SetTrustLineFlags` clearing `AUTHORIZED`), and
+- **Revoke / freeze** a trustline's authorization (`SetTrustLineFlags` clearing `AUTHORIZED`, which
+  requires the issuer to have set `AUTH_REVOCABLE`), and
 - **Claw back** issued amounts (`Clawback`, CAP-35) when the issuer enabled clawback.
 
 These operations MUST be authenticated and audited, and MUST be reachable only by the issuer. They
@@ -394,9 +402,9 @@ open API.
 
 **Why CAP-73 is a dependency-free optimization.** CAP-73 / CAP-32 would let an issuer pre-authorize
 a trustline at the protocol level, removing the per-onboarding `SetTrustLineFlags` round-trip. They
-are draft. This SEP authorizes at trustline-creation time using finalized CAP-18 semantics, and is
-structured (`issuerAuthOpIndex`, the approval interface) so an implementation can switch to a
-protocol-level path behind the same surface once those CAPs land.
+are draft. This SEP authorizes at trustline-creation time using the finalized `SetTrustLineFlags`
+operation (CAP-35), and is structured (`issuerAuthOpIndex`, the approval interface) so an
+implementation can switch to a protocol-level path behind the same surface once those CAPs land.
 
 **Why the redirect parameters are presentation-agnostic.** Branding parameters (`logo`, `primary`)
 never influence transaction construction, so a malicious referrer cannot use them to alter what is
