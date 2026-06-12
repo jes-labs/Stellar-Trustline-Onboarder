@@ -14,6 +14,7 @@ import {
   APPROVAL_SERVER_URL,
   HORIZON_URL,
   IS_TESTNET,
+  LIVE,
   NETWORK_PASSPHRASE,
   sponsorKeypair,
   sponsorPublicKey,
@@ -85,6 +86,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (config.simulate === 'rejected')
     return NextResponse.json({ code: 'rejected' }, { status: 422 });
 
+  // Demo mode (not live): return a placeholder so the flow runs with no sponsor secret or wallet.
+  // The client sees `simulated` and skips wallet signing; the submit route returns a fake hash.
+  if (!LIVE) {
+    return NextResponse.json({
+      xdr: 'SIMULATED',
+      networkPassphrase: NETWORK_PASSPHRASE,
+      simulated: true,
+    });
+  }
+
   const code = body.asset?.code ?? config.assetCode;
   const issuer = body.asset?.issuer ?? config.issuer;
   if (!issuer) return fail('failed', 'missing asset issuer', 400);
@@ -136,7 +147,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Sign as the sponsor (who pays the reserve). The wallet adds the user's signature next.
     const tx = parseTransaction(xdr, NETWORK_PASSPHRASE);
     tx.sign(sponsorKeypair());
-    return NextResponse.json({ xdr: tx.toXDR() });
+    return NextResponse.json({
+      xdr: tx.toXDR(),
+      networkPassphrase: NETWORK_PASSPHRASE,
+      simulated: false,
+    });
   } catch (err) {
     if (err instanceof ApprovalRedirect) {
       return NextResponse.json({ code: err.code }, { status: 422 });

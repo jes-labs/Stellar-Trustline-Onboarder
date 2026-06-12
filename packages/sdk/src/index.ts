@@ -11,7 +11,9 @@ export { OnboardingError, type OnboardingErrorCode } from './errors';
 export { TrustlineOnboarder } from './onboarder';
 export { buildRedirectUrl } from './redirect';
 export type {
+  AssetOption,
   AssetRef,
+  ClaimableAsset,
   DetectResult,
   Mechanism,
   NetworkName,

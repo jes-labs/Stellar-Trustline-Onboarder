@@ -45,6 +45,30 @@ export interface DetectResult {
   authorized: boolean;
 }
 
+/** One asset returned by {@link TrustlineOnboarder.searchAssets} (a code + a specific issuer). */
+export interface AssetOption {
+  code: string;
+  issuer: string;
+  /** AUTH_REQUIRED — needs the issuer's approval to activate. */
+  regulated: boolean;
+  /** Total trustlines on this asset, for ranking and disambiguating issuers. */
+  holders: number;
+  /** Home domain from the asset's stellar.toml link, when present. */
+  domain?: string;
+}
+
+/** A classic asset an account has a pending claimable balance for. */
+export interface ClaimableAsset {
+  /** The claimable balance id — pass to `buildOnboardingTx({ balanceId })` to claim it. */
+  balanceId: string;
+  asset: AssetRef;
+  amount: string;
+  /** The account that funded (and may reclaim) the balance. */
+  sponsor?: string;
+  /** Whether the claim predicate is satisfied right now for this account. */
+  claimableNow: boolean;
+}
+
 /** The output of {@link TrustlineOnboarder.buildOnboardingTx}: an XDR awaiting the user's signature. */
 export interface OnboardingPlan {
   /** Unsigned (issuer-approved, for regulated assets) transaction envelope, base64 XDR. */

@@ -17,6 +17,8 @@ export interface State {
   connectError: string | null;
   /** The asset being activated; null until chosen in the picker. */
   asset: SelectedAsset | null;
+  /** A claimable balance id when the chosen asset is a pending claim; null for a plain trustline. */
+  balanceId: string | null;
   /** True when the asset came fixed on the URL (exchange-driven), so the picker is skipped. */
   assetLocked: boolean;
 }
@@ -25,7 +27,7 @@ export type Action =
   | { type: 'getStarted' }
   | { type: 'back' }
   | { type: 'goto'; screen: Screen }
-  | { type: 'chooseAsset'; asset: SelectedAsset }
+  | { type: 'chooseAsset'; asset: SelectedAsset; balanceId?: string }
   | { type: 'connecting' }
   | { type: 'connected'; address: string; walletName: string }
   | { type: 'connectFailed'; message: string }
@@ -37,30 +39,36 @@ export type Action =
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'getStarted':
-      // Skip the picker when the asset is fixed by the URL; otherwise choose it first.
-      return { ...state, screen: state.asset ? 'connect' : 'selectAsset' };
+      // Connect first, so the picker can show the connected wallet's pending claims.
+      return { ...state, screen: 'connect' };
     case 'back':
       switch (state.screen) {
         case 'review':
+          return { ...state, screen: state.assetLocked ? 'connect' : 'selectAsset' };
+        case 'selectAsset':
           return { ...state, screen: 'connect' };
-        case 'connect':
-          return { ...state, screen: state.assetLocked ? 'welcome' : 'selectAsset' };
         default:
           return { ...state, screen: 'welcome' };
       }
     case 'goto':
       return { ...state, screen: action.screen };
     case 'chooseAsset':
-      return { ...state, asset: action.asset, screen: 'connect' };
+      return {
+        ...state,
+        asset: action.asset,
+        balanceId: action.balanceId ?? null,
+        screen: 'review',
+      };
     case 'connecting':
       return { ...state, connecting: true, connectError: null };
     case 'connected':
+      // With a URL-fixed asset there is nothing to pick — go straight to review.
       return {
         ...state,
         address: action.address,
         walletName: action.walletName,
         connecting: false,
-        screen: 'review',
+        screen: state.assetLocked ? 'review' : 'selectAsset',
       };
     case 'connectFailed':
       return { ...state, connecting: false, connectError: action.message };
@@ -80,7 +88,7 @@ export function reducer(state: State, action: Action): State {
 export interface ActivationActions {
   getStarted: () => void;
   back: () => void;
-  chooseAsset: (asset: SelectedAsset) => void;
+  chooseAsset: (asset: SelectedAsset, balanceId?: string) => void;
   connect: () => void;
   activate: () => void;
   runStatusAction: (action: StatusAction) => void;
@@ -116,6 +124,7 @@ export function useActivation(config: ActivationConfig, backend: ActivationBacke
     connecting: false,
     connectError: null,
     asset: lockedAsset,
+    balanceId: config.balanceId ?? null,
     assetLocked: lockedAsset !== null,
   });
 
@@ -134,11 +143,19 @@ export function useActivation(config: ActivationConfig, backend: ActivationBacke
     runRef.current = controller;
     dispatch({ type: 'approve' });
 
+    // Fold the picker-chosen claimable balance into the config the backend builds from; the build
+    // route reads `config.balanceId` to decide claim-vs-trustline.
+    const current = stateRef.current;
+    const effectiveConfig =
+      current.balanceId && current.balanceId !== config.balanceId
+        ? { ...config, balanceId: current.balanceId }
+        : config;
+
     backend
       .activate({
-        config,
-        asset: stateRef.current.asset,
-        address: stateRef.current.address,
+        config: effectiveConfig,
+        asset: current.asset,
+        address: current.address,
         onSubmitting: () => dispatch({ type: 'submitting' }),
         signal: controller.signal,
       })
@@ -212,7 +229,8 @@ export function useActivation(config: ActivationConfig, backend: ActivationBacke
     () => ({
       getStarted: () => dispatch({ type: 'getStarted' }),
       back: () => dispatch({ type: 'back' }),
-      chooseAsset: (asset: SelectedAsset) => dispatch({ type: 'chooseAsset', asset }),
+      chooseAsset: (asset: SelectedAsset, balanceId?: string) =>
+        dispatch({ type: 'chooseAsset', asset, balanceId }),
       connect,
       activate: runActivate,
       runStatusAction,

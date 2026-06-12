@@ -85,11 +85,15 @@ export async function connectWallet(): Promise<{ address: string; walletName: st
 }
 
 /** Sign an unsigned/partially-signed transaction XDR with the connected wallet; return the new XDR. */
-export async function signTransactionXdr(xdr: string, address: string): Promise<string> {
+export async function signTransactionXdr(
+  xdr: string,
+  address: string,
+  networkPassphrase: string = NETWORK_PASSPHRASE,
+): Promise<string> {
   const { kit } = await loadKit();
   try {
     const { signedTxXdr } = await kit.signTransaction(xdr, {
-      networkPassphrase: NETWORK_PASSPHRASE,
+      networkPassphrase,
       address,
     });
     return signedTxXdr;

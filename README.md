@@ -158,13 +158,16 @@ process. The server will sign exactly one kind of onboarding operation, `setTrus
 sets the authorized flag on the issuer's own asset, and nothing else. Anything broader is
 rejected before a signature is ever applied.
 
-### Designed to become a standard
+### The standard
 
-The public interfaces are built so the SEP can be transcribed from them. Three things are kept
-stable and documented: the approval-server request and response shapes (the server side of the
-standard), the SDK surface and the activation deep-link parameters (the client side), and the
-operation sequences for each mechanism and profile (the reference flows). When those are settled
-in code and proven by the demo and a pilot, the specification is a transcription of them.
+The standard is written as a Stellar Ecosystem Proposal:
+[**SEP-XXXX: Trustline Onboarding**](docs/sep-trustline-onboarding.md) (draft). It transcribes the
+interfaces this repository keeps stable — the approval-server request/response shapes, the SDK
+surface and activation deep-link parameters, and the operation sequences for each mechanism and
+profile — and the reference implementation here implements that draft end to end.
+
+See also the [integration guide](docs/integration-guide.md) for adopters and the
+[production checklist](docs/production-checklist.md) for mainnet hardening.
 
 ## Standards alignment
 
