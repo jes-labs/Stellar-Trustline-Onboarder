@@ -8,7 +8,8 @@ export const ConnectWallet = memo(function ConnectWallet({
   error,
   onConnect,
 }: {
-  asset: string;
+  /** Asset code when fixed by the URL; null when the user will pick after connecting. */
+  asset: string | null;
   connecting: boolean;
   error: string | null;
   onConnect: () => void;
@@ -23,8 +24,8 @@ export const ConnectWallet = memo(function ConnectWallet({
           Connect your wallet
         </h1>
         <p className="max-w-[320px] text-[14px] leading-[1.55] text-muted">
-          Connect a Stellar wallet to receive {asset}. We support Freighter, xBull, Albedo, Rabet,
-          and Lobstr.
+          Connect a Stellar wallet to {asset ? `receive ${asset}` : 'get started'}. We support
+          Freighter, xBull, Albedo, Rabet, and Lobstr.
         </p>
       </div>
 

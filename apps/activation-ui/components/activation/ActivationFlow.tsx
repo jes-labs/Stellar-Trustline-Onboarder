@@ -50,11 +50,13 @@ export function ActivationFlow({ config }: { config: ActivationConfig }) {
         />
       )}
 
-      {state.screen === 'selectAsset' && <SelectAsset onChoose={actions.chooseAsset} />}
+      {state.screen === 'selectAsset' && (
+        <SelectAsset address={state.address} onChoose={actions.chooseAsset} />
+      )}
 
       {state.screen === 'connect' && (
         <ConnectWallet
-          asset={assetCode}
+          asset={state.asset?.code ?? null}
           connecting={state.connecting}
           error={state.connectError}
           onConnect={actions.connect}

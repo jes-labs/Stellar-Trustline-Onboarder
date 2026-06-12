@@ -10,37 +10,45 @@ const base: State = {
   connecting: false,
   connectError: null,
   asset: null,
+  balanceId: null,
   assetLocked: false,
 };
 
 const ASSET: SelectedAsset = { code: 'EURC', issuer: 'GISSUER', regulated: false };
 
 describe('reducer — navigation', () => {
-  it('getStarted goes to the picker when no asset is chosen', () => {
-    expect(reducer(base, { type: 'getStarted' }).screen).toBe('selectAsset');
-  });
-
-  it('getStarted skips the picker when the asset is fixed', () => {
+  it('getStarted always connects first (so the picker can show pending claims)', () => {
+    expect(reducer(base, { type: 'getStarted' }).screen).toBe('connect');
     const locked = { ...base, asset: ASSET, assetLocked: true };
     expect(reducer(locked, { type: 'getStarted' }).screen).toBe('connect');
   });
 
-  it('chooseAsset records the asset and advances to connect', () => {
-    const next = reducer({ ...base, screen: 'selectAsset' }, { type: 'chooseAsset', asset: ASSET });
-    expect(next.asset).toEqual(ASSET);
-    expect(next.screen).toBe('connect');
+  it('chooseAsset records the asset (+ optional balanceId) and advances to review', () => {
+    const plain = reducer(
+      { ...base, screen: 'selectAsset' },
+      { type: 'chooseAsset', asset: ASSET },
+    );
+    expect(plain.asset).toEqual(ASSET);
+    expect(plain.balanceId).toBeNull();
+    expect(plain.screen).toBe('review');
+
+    const claim = reducer(
+      { ...base, screen: 'selectAsset' },
+      { type: 'chooseAsset', asset: ASSET, balanceId: 'BAL1' },
+    );
+    expect(claim.balanceId).toBe('BAL1');
   });
 
-  it('back from connect returns to the picker, or to welcome when the asset is locked', () => {
-    expect(reducer({ ...base, screen: 'connect' }, { type: 'back' }).screen).toBe('selectAsset');
-    expect(
-      reducer({ ...base, screen: 'connect', assetLocked: true }, { type: 'back' }).screen,
-    ).toBe('welcome');
+  it('back from connect returns to welcome; back from selectAsset returns to connect', () => {
+    expect(reducer({ ...base, screen: 'connect' }, { type: 'back' }).screen).toBe('welcome');
+    expect(reducer({ ...base, screen: 'selectAsset' }, { type: 'back' }).screen).toBe('connect');
   });
 
-  it('back from review returns to connect; back from selectAsset returns to welcome', () => {
-    expect(reducer({ ...base, screen: 'review' }, { type: 'back' }).screen).toBe('connect');
-    expect(reducer({ ...base, screen: 'selectAsset' }, { type: 'back' }).screen).toBe('welcome');
+  it('back from review returns to the picker, or to connect when the asset is locked', () => {
+    expect(reducer({ ...base, screen: 'review' }, { type: 'back' }).screen).toBe('selectAsset');
+    expect(reducer({ ...base, screen: 'review', assetLocked: true }, { type: 'back' }).screen).toBe(
+      'connect',
+    );
   });
 });
 
@@ -51,12 +59,18 @@ describe('reducer — connection', () => {
     expect(next.connectError).toBeNull();
   });
 
-  it('connected stores the wallet and advances to review', () => {
-    const next = reducer(
+  it('connected goes to the picker, or straight to review when the asset is locked', () => {
+    const picker = reducer(
       { ...base, connecting: true },
       { type: 'connected', address: 'GUSER', walletName: 'Freighter' },
     );
-    expect(next).toMatchObject({
+    expect(picker.screen).toBe('selectAsset');
+
+    const locked = reducer(
+      { ...base, connecting: true, assetLocked: true },
+      { type: 'connected', address: 'GUSER', walletName: 'Freighter' },
+    );
+    expect(locked).toMatchObject({
       address: 'GUSER',
       walletName: 'Freighter',
       connecting: false,

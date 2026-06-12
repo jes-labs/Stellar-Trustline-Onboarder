@@ -12,6 +12,14 @@ import { PUBLIC, TESTNET } from '@trustline-onboarder/core';
 
 const NETWORK = process.env.STELLAR_NETWORK === 'public' ? PUBLIC : TESTNET;
 
+/**
+ * Live mode touches the chain for real (build, sponsor-sign, submit). Left off — the default —
+ * the build route returns a simulated response so the app runs with no sponsor secret and no
+ * wallet. A live deployment sets `ACTIVATION_MODE=live` here and `NEXT_PUBLIC_ACTIVATION_MODE=live`
+ * on the client.
+ */
+export const LIVE = process.env.ACTIVATION_MODE === 'live';
+
 /** True on testnet, where we may Friendbot-fund a recipient account that does not exist yet. */
 export const IS_TESTNET = NETWORK === TESTNET;
 

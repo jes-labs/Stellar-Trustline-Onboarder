@@ -9,12 +9,15 @@ import {
   submit,
 } from '@trustline-onboarder/core';
 import { requestApproval, resolveApprovalServer } from './approval';
+import { listClaimableAssets, searchAssets } from './assets';
 import { OnboardingError } from './errors';
 import { detectTrustline, isRegulated, loadSource } from './horizon';
 import { explorerTxUrl, networkConfig } from './network';
 import { buildRedirectUrl } from './redirect';
 import { signWithSponsor, sponsorPublicKey } from './sponsor';
 import type {
+  AssetOption,
+  ClaimableAsset,
   DetectResult,
   OnboardingPlan,
   OnboardRequest,
@@ -56,6 +59,23 @@ export class TrustlineOnboarder {
   }): Promise<boolean> {
     const result = await this.detect(params);
     return result.hasTrustline && result.authorized;
+  }
+
+  /**
+   * Search assets by code (Horizon `/assets`), ranked by holder count. A code maps to many
+   * issuers, so each result carries its own issuer — use it to drive an asset picker.
+   */
+  searchAssets(code: string): Promise<AssetOption[]> {
+    return searchAssets(this.net.horizonUrl, code);
+  }
+
+  /**
+   * List the assets `account` has a pending claimable balance for — what a connected wallet can
+   * activate-and-claim. Each entry carries the `balanceId` to pass to
+   * {@link buildOnboardingTx}. Native XLM is excluded; `claimableNow` reflects the claim predicate.
+   */
+  listClaimableAssets(account: string): Promise<ClaimableAsset[]> {
+    return listClaimableAssets(this.net.horizonUrl, account);
   }
 
   /**

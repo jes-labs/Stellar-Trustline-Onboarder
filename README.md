@@ -158,13 +158,16 @@ process. The server will sign exactly one kind of onboarding operation, `setTrus
 sets the authorized flag on the issuer's own asset, and nothing else. Anything broader is
 rejected before a signature is ever applied.
 
-### Designed to become a standard
+### The standard
 
-The public interfaces are built so the SEP can be transcribed from them. Three things are kept
-stable and documented: the approval-server request and response shapes (the server side of the
-standard), the SDK surface and the activation deep-link parameters (the client side), and the
-operation sequences for each mechanism and profile (the reference flows). When those are settled
-in code and proven by the demo and a pilot, the specification is a transcription of them.
+The standard is written as a Stellar Ecosystem Proposal:
+[**SEP-XXXX: Trustline Onboarding**](docs/sep-trustline-onboarding.md) (draft). It transcribes the
+interfaces this repository keeps stable — the approval-server request/response shapes, the SDK
+surface and activation deep-link parameters, and the operation sequences for each mechanism and
+profile — and the reference implementation here implements that draft end to end.
+
+See also the [integration guide](docs/integration-guide.md) for adopters and the
+[production checklist](docs/production-checklist.md) for mainnet hardening.
 
 ## Standards alignment
 
@@ -172,8 +175,10 @@ Everything on the critical path uses operations that are final and live on mainn
 
 - Claimable balances (CAP-23) for mechanism C.
 - Sponsored reserves (CAP-33) so the user needs no XLM.
-- Fine-grained authorization (CAP-18, final since Protocol 13) for the `AUTH_REQUIRED` state.
-- Clawback (CAP-35) for the regulated profile.
+- `SetTrustLineFlags` (CAP-35, Protocol 17) to authorize a trustline for the `AUTH_REQUIRED`
+  (regulated) profile, and clawback for the regulated lifecycle.
+- The `AUTH_REQUIRED` / `AUTH_REVOCABLE` account flags (base protocol); CAP-18 (Protocol 13) is the
+  relevant fine-grained authorization model.
 - SEP-1 for discovery, SEP-8 for the regulated-assets approval interface, and SEP-10 / SEP-12
   as the auth and KYC hooks.
 

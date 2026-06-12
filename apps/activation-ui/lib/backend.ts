@@ -1,3 +1,4 @@
+import { DEMO_ADDRESS } from './config';
 import type { ActivationConfig, SelectedAsset } from './types';
 
 /** The edge states a backend can surface, named to match their screens. */
@@ -101,6 +102,11 @@ interface BuildResponse {
  */
 export class HttpBackend implements ActivationBackend {
   async connect(): Promise<{ address: string; walletName: string }> {
+    if (!LIVE) {
+      // Demo mode: no wallet extension needed. A stand-in address until configured live.
+      await new Promise((r) => setTimeout(r, 400));
+      return { address: DEMO_ADDRESS, walletName: 'Demo wallet' };
+    }
     const { connectWallet } = await import('./walletKit');
     return connectWallet();
   }
@@ -112,7 +118,7 @@ export class HttpBackend implements ActivationBackend {
 
     // Server builds the transaction and runs the issuer approval (SEP-8) for regulated assets,
     // then signs as the sponsor. KYC and compliance outcomes come back here. It returns the XDR
-    // the wallet still needs to add the user's signature to.
+    // the wallet still needs to add the user's signature to — or `simulated` in demo mode.
     const buildRes = await fetch('/api/activation/build', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -122,13 +128,19 @@ export class HttpBackend implements ActivationBackend {
     if (!buildRes.ok) throw await toActivationError(buildRes);
     const build = (await buildRes.json()) as BuildResponse;
 
-    // The connected wallet adds the user's signature. This is the approval the user sees.
-    const { signTransactionXdr } = await import('./walletKit');
-    const signedXdr = await signTransactionXdr(xdr, address);
-    if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+    let signedXdr = build.xdr;
+    if (build.simulated) {
+      // No real transaction to sign — mimic the wallet-approval pause so the UI feels real.
+      await delay(2400, signal);
+    } else {
+      // The connected wallet adds the user's signature. This is the approval the user sees.
+      const { signTransactionXdr } = await import('./walletKit');
+      signedXdr = await signTransactionXdr(build.xdr, address, build.networkPassphrase);
+      if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+    }
     onSubmitting();
 
-    onSubmitting();
+    // Server submits to Horizon (or returns a fake hash for the simulated placeholder).
     const submitRes = await fetch('/api/activation/submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
